@@ -4,14 +4,13 @@ This is a new submission.
 
 ## Test environments
 
-* Windows 10 x64, R 4.5.2, Rtools45 (GCC 14.2.0)
-* Windows 10 x64, R 4.6.2, Rtools45 (GCC 14.2.0)
+* Windows 10 x64, R 4.5.2 and R 4.6.2, Rtools45 (GCC 14.2.0), local
 * win-builder, Windows Server 2022 x64, R-devel (2026-11-16 r90914),
-  GCC 14.3.0
-
-<!-- Before submitting, add the results of the other platforms here:
-     a macOS check (https://mac.r-project.org/macbuilder/submit.html) and a
-     Linux check (R-hub, GitHub Actions or a local `R CMD check --as-cran`). -->
+  GCC 14.3.0 (an earlier build of this version)
+* GitHub Actions, Ubuntu 26.04, GCC 15.2.0: R-devel (2026-11-16 r90914),
+  R 4.6.2 and R 4.5.3
+* GitHub Actions, macOS 26 (arm64), Apple clang 21.0.0, R 4.6.2
+* GitHub Actions, Windows Server 2022 x64, GCC 14.3.0, R 4.6.2
 
 ## R CMD check results
 
@@ -25,7 +24,8 @@ This is a new submission.
 The package requires C++23 (`SystemRequirements: C++23`, `CXX_STD = CXX23`),
 because the bundled 'Glaze' library is written in C++23. It therefore needs a
 recent compiler (GCC >= 13, Clang >= 19 are what upstream tests with) and will
-not build on platforms whose compiler lacks C++23 support.
+not build on platforms whose compiler lacks C++23 support. I could not test
+Apple clang 14, which some of the CRAN macOS check machines use.
 
 ## Bundled code
 
