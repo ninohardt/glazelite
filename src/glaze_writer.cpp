@@ -5,9 +5,12 @@
 
 #include <climits>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -72,26 +75,201 @@ class output {
   std::string buffer_;
 };
 
+// Keeps R objects created while writing alive, and releases them when the
+// scope ends, also when a C++ exception passes through.
+class protect_guard {
+ public:
+  protect_guard() = default;
+  protect_guard(const protect_guard&) = delete;
+  protect_guard& operator=(const protect_guard&) = delete;
+  ~protect_guard() { if (n_) UNPROTECT(n_); }
+  SEXP add(SEXP x) { PROTECT(x); ++n_; return x; }
+
+ private:
+  int n_ = 0;
+};
+
+SEXP list_element(SEXP list, const char* name) {
+  SEXP names = Rf_getAttrib(list, R_NamesSymbol);
+  if (TYPEOF(list) == VECSXP && TYPEOF(names) == STRSXP) {
+    for (R_xlen_t i = 0, n = XLENGTH(list); i < n; ++i) {
+      if (std::strcmp(CHAR(STRING_ELT(names, i)), name) == 0) return VECTOR_ELT(list, i);
+    }
+  }
+  throw std::runtime_error(std::string("missing JSON option: ") + name);
+}
+
+bool flag_option(SEXP list, const char* name) {
+  SEXP x = list_element(list, name);
+  if (TYPEOF(x) != LGLSXP || XLENGTH(x) != 1 || LOGICAL(x)[0] == NA_LOGICAL)
+    throw std::runtime_error(std::string(name) + " must be TRUE or FALSE");
+  return LOGICAL(x)[0] != 0;
+}
+
+int int_option(SEXP list, const char* name) {
+  SEXP x = list_element(list, name);
+  if (TYPEOF(x) != INTSXP || XLENGTH(x) != 1)
+    throw std::runtime_error(std::string("invalid JSON option: ") + name);
+  return INTEGER(x)[0];
+}
+
+std::string string_option(SEXP list, const char* name) {
+  SEXP x = list_element(list, name);
+  if (TYPEOF(x) != STRSXP || XLENGTH(x) != 1 || STRING_ELT(x, 0) == NA_STRING)
+    throw std::runtime_error(std::string("invalid JSON option: ") + name);
+  return CHAR(STRING_ELT(x, 0));
+}
+
+// The options of toJSON(), validated in R by .writer_options().
+struct options {
+  enum class layout { rows, columns, values };
+  enum class posix { string, iso8601, epoch, mongo };
+
+  layout dataframe = layout::rows;
+  bool date_epoch = false;
+  posix posixt = posix::string;
+  bool factor_integer = false;
+  bool null_as_list = true;
+  bool na_string = false;
+  bool auto_unbox = false;
+  int digits = NA_INTEGER;     // NA: shortest text that round-trips
+  bool digits_signif = false;
+  int indent = -1;             // negative: compact output
+  bool always_decimal = false;
+  int rownames = NA_LOGICAL;   // NA: write character row names only
+  SEXP time_format = R_NilValue;
+
+  explicit options(SEXP x) {
+    if (TYPEOF(x) != VECSXP) throw std::runtime_error("invalid JSON options");
+    const std::string df = string_option(x, "dataframe");
+    dataframe = df == "columns" ? layout::columns
+              : df == "values" ? layout::values : layout::rows;
+    date_epoch = string_option(x, "Date") == "epoch";
+    const std::string px = string_option(x, "POSIXt");
+    posixt = px == "ISO8601" ? posix::iso8601 : px == "epoch" ? posix::epoch
+           : px == "mongo" ? posix::mongo : posix::string;
+    factor_integer = string_option(x, "factor") == "integer";
+    null_as_list = string_option(x, "null") == "list";
+    na_string = string_option(x, "na") == "string";
+    auto_unbox = flag_option(x, "auto_unbox");
+    digits = int_option(x, "digits");
+    digits_signif = flag_option(x, "digits_signif");
+    indent = int_option(x, "indent");
+    always_decimal = flag_option(x, "always_decimal");
+    SEXP rn = list_element(x, "rownames");
+    if (TYPEOF(rn) != LGLSXP || XLENGTH(rn) != 1)
+      throw std::runtime_error("invalid JSON option: rownames");
+    rownames = LOGICAL(rn)[0];
+    time_format = list_element(x, "time_format");
+    if (!Rf_isFunction(time_format))
+      throw std::runtime_error("invalid JSON option: time_format");
+  }
+};
+
+// How the elements of one atomic vector are written.
+enum class kind { lgl, integer, real, str, factor, date, mongo };
+
+struct vec {
+  SEXP x = R_NilValue;       // the vector that is indexed, possibly converted
+  kind k = kind::lgl;
+  SEXP levels = R_NilValue;  // for factors
+  bool unbox = false;        // marked with unbox()
+  bool asis = false;         // wrapped in I()
+};
+
+struct frame_info;
+
+struct column {
+  SEXP x = R_NilValue;
+  bool is_list = false;
+  bool is_matrix = false;
+  R_xlen_t nrow = 0, ncol = 0;           // of a matrix column
+  vec v;                                 // atomic and matrix columns
+  std::unique_ptr<frame_info> nested;    // data-frame columns
+};
+
+struct frame_info {
+  SEXP names = R_NilValue;
+  std::vector<column> cols;
+  R_xlen_t rows = 0;
+  SEXP row_names = R_NilValue;           // written as "_row" when not nil
+};
+
+// Days since 1970-01-01 to a proleptic Gregorian date.
+void civil_from_days(int64_t z, int64_t& year, unsigned& month, unsigned& day) {
+  z += 719468;
+  const int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+  const unsigned doe = static_cast<unsigned>(z - era * 146097);
+  const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  const unsigned mp = (5 * doy + 2) / 153;
+  day = doy - (153 * mp + 2) / 5 + 1;
+  month = mp < 10 ? mp + 3 : mp - 9;
+  year = static_cast<int64_t>(yoe) + era * 400 + (month <= 2 ? 1 : 0);
+}
+
+// Fixed notation with at most `digits` decimals and no trailing zeros, with
+// the rounding jsonlite applies: half-way cases go to the even digit.
+int format_fixed(double value, char* out, int digits) {
+  static const double pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000,
+                                 10000000, 100000000, 1000000000};
+  const bool negative = value < 0;
+  if (negative) value = -value;
+  int whole = static_cast<int>(value);
+  const double scaled = (value - whole) * pow10[digits];
+  uint32_t frac = static_cast<uint32_t>(scaled);
+  double diff = scaled - frac;
+  if (diff > 0.5 || (diff == 0.5 && (frac & 1))) {
+    ++frac;
+    if (frac >= pow10[digits]) { frac = 0; ++whole; }  // 0.95 becomes 1
+  }
+  if (digits == 0) {
+    diff = value - whole;
+    if (diff > 0.5 || (diff == 0.5 && (whole & 1))) ++whole;
+    frac = 0;
+  }
+  char* p = out;
+  if (negative) *p++ = '-';
+  p += std::snprintf(p, 16, "%d", whole);
+  if (frac != 0) {
+    char digits_text[16];
+    int n = std::snprintf(digits_text, sizeof(digits_text), "%0*u", digits,
+                          static_cast<unsigned>(frac));
+    while (n > 0 && digits_text[n - 1] == '0') --n;
+    *p++ = '.';
+    std::memcpy(p, digits_text, static_cast<size_t>(n));
+    p += n;
+  }
+  return static_cast<int>(p - out);
+}
+
 class writer {
  public:
-  writer(output& out, bool auto_unbox, const char* dataframe, const char* na,
-         const char* factor, bool always_decimal, bool pretty = false)
-      : out_(out), auto_unbox_(auto_unbox), dataframe_(dataframe),
-        na_string_(std::strcmp(na, "string") == 0),
-        factor_integer_(std::strcmp(factor, "integer") == 0),
-        always_decimal_(always_decimal), pretty_(pretty) {}
+  writer(output& out, const options& opt) : out_(out), opt_(opt) {}
 
   void value(SEXP x, unsigned depth = 0, bool force_array = false) {
     if (depth > 1000) throw std::runtime_error("JSON nesting is too deep");
-    if (x == R_NilValue) { out_.literal("null"); return; }
-    if (Rf_inherits(x, "data.frame")) { frame(x, depth); return; }
-    SEXP dim = Rf_getAttrib(x, R_DimSymbol);
-    if (dim != R_NilValue) {
-      array(x, dim, depth); return;
+    if (x == R_NilValue) {
+      out_.literal(opt_.null_as_list ? "{}" : "null");
+      return;
     }
-    if (TYPEOF(x) == VECSXP) {
+    if (Rf_inherits(x, "data.frame")) {
+      if (Rf_inherits(x, "scalar")) {
+        // unbox() of a data frame with one row: the row itself.
+        protect_guard guard;
+        const frame_info f = prepare_frame(x, guard, depth);
+        if (f.rows != 1) throw std::runtime_error("only data frames with one row can be unboxed");
+        frame_row(f, 0, depth);
+      } else {
+        frame(x, depth);
+      }
+      return;
+    }
+    SEXP dim = Rf_getAttrib(x, R_DimSymbol);
+    if (dim != R_NilValue) { array(x, dim, depth); return; }
+    if (TYPEOF(x) == VECSXP && !Rf_inherits(x, "POSIXlt")) {
       SEXP names = Rf_getAttrib(x, R_NamesSymbol);
-      if (names != R_NilValue && XLENGTH(x) > 0) {
+      if (names != R_NilValue) {
         object(x, names, depth);
       } else {
         out_.put('[');
@@ -106,26 +284,24 @@ class writer {
       }
       return;
     }
-    if (!atomic(x)) throw std::runtime_error("unsupported R type");
-    if (has_unsupported_class(x)) throw std::runtime_error("unsupported R class");
-    R_xlen_t n = XLENGTH(x);
-    if (n == 1 && auto_unbox_ && !force_array && !Rf_inherits(x, "AsIs")) {
-      scalar(x, 0); return;
+    protect_guard guard;
+    const vec v = classify(x, guard);
+    const R_xlen_t n = XLENGTH(v.x);
+    if (n == 1 && !force_array && (v.unbox || (opt_.auto_unbox && !v.asis))) {
+      scalar(v, 0);
+      return;
     }
-    out_.put('[');
-    for (R_xlen_t i = 0; i < n; ++i) {
-      if (i) separator();
-      scalar(x, i);
-      interrupt(i);
-    }
-    out_.put(']');
+    vector(v, n);
   }
 
-  void stream_batch(SEXP x) {
+  // Writes records `from` (inclusive) to `to` (exclusive), one per line.
+  void stream_batch(SEXP x, R_xlen_t from, R_xlen_t to) {
     if (Rf_inherits(x, "data.frame")) {
-      const R_xlen_t n = frame_rows(x);
-      for (R_xlen_t i = 0; i < n; ++i) {
-        frame_row(x, i, 0);
+      protect_guard guard;
+      const frame_info f = prepare_frame(x, guard, 0);
+      if (to < 0 || to > f.rows) to = f.rows;
+      for (R_xlen_t i = from < 0 ? 0 : from; i < to; ++i) {
+        frame_row(f, i, 0);
         out_.put('\n');
         interrupt(i);
       }
@@ -133,7 +309,8 @@ class writer {
     }
     if (TYPEOF(x) != VECSXP || Rf_getAttrib(x, R_NamesSymbol) != R_NilValue)
       throw std::runtime_error("stream batch must be a data frame or unnamed list of records");
-    for (R_xlen_t i = 0, n = XLENGTH(x); i < n; ++i) {
+    if (to < 0 || to > XLENGTH(x)) to = XLENGTH(x);
+    for (R_xlen_t i = from < 0 ? 0 : from; i < to; ++i) {
       value(VECTOR_ELT(x, i));
       out_.put('\n');
       interrupt(i);
@@ -142,98 +319,121 @@ class writer {
 
  private:
   output& out_;
-  bool auto_unbox_;
-  std::string dataframe_;
-  bool na_string_;
-  bool factor_integer_;
-  bool always_decimal_;
-  bool pretty_;
+  const options& opt_;
   std::string scratch_;
   R_xlen_t array_steps_ = 0;
 
-  void separator() { out_.literal(pretty_ ? ", " : ","); }
+  bool pretty() const { return opt_.indent >= 0; }
+
+  void separator() { out_.literal(pretty() ? ", " : ","); }
+
+  void colon() { out_.literal(pretty() ? ": " : ":"); }
 
   void newline(unsigned depth) {
-    if (!pretty_) return;
+    if (!pretty()) return;
     out_.put('\n');
-    for (unsigned i = 0; i < depth; ++i) out_.literal("  ");
-  }
-
-  static bool atomic(SEXP x) {
-    switch (TYPEOF(x)) {
-      case LGLSXP: case INTSXP: case REALSXP: case STRSXP: return true;
-      default: return false;
+    for (unsigned i = 0; i < depth; ++i) {
+      for (int j = 0; j < opt_.indent; ++j) out_.put(' ');
     }
-  }
-
-  static bool has_unsupported_class(SEXP x) {
-    return Rf_getAttrib(x, R_ClassSymbol) != R_NilValue &&
-           !Rf_inherits(x, "AsIs") && !Rf_inherits(x, "factor");
-  }
-
-  static bool is_matrix_column(SEXP column) {
-    return TYPEOF(column) != VECSXP &&
-           Rf_getAttrib(column, R_DimSymbol) != R_NilValue;
-  }
-
-  // The number of rows a data-frame column provides. Columns may be atomic
-  // vectors, lists, matrices, or data frames.
-  static R_xlen_t column_rows(SEXP column, unsigned depth) {
-    if (Rf_inherits(column, "data.frame")) return frame_rows(column, depth + 1);
-    SEXP dim = Rf_getAttrib(column, R_DimSymbol);
-    if (dim != R_NilValue) {
-      if (!atomic(column) || TYPEOF(dim) != INTSXP || XLENGTH(dim) != 2 ||
-          INTEGER(dim)[0] < 0 || INTEGER(dim)[1] < 0 ||
-          static_cast<R_xlen_t>(INTEGER(dim)[0]) * INTEGER(dim)[1] != XLENGTH(column))
-        throw std::runtime_error(
-            "data frame columns with dimensions must be atomic matrices");
-      return INTEGER(dim)[0];
-    }
-    if (!atomic(column) && TYPEOF(column) != VECSXP)
-      throw std::runtime_error("unsupported data frame column type");
-    return XLENGTH(column);
-  }
-
-  // Also checks that all columns have the same number of rows, so that the
-  // row writers never index past the end of a column.
-  static R_xlen_t frame_rows(SEXP x, unsigned depth = 0) {
-    if (depth > 1000) throw std::runtime_error("JSON nesting is too deep");
-    if (XLENGTH(x)) {
-      const R_xlen_t rows = column_rows(VECTOR_ELT(x, 0), depth);
-      for (R_xlen_t col = 1, n = XLENGTH(x); col < n; ++col) {
-        if (column_rows(VECTOR_ELT(x, col), depth) != rows)
-          throw std::runtime_error("data frame columns differ in their number of rows");
-      }
-      SEXP names = Rf_getAttrib(x, R_NamesSymbol);
-      if (TYPEOF(names) != STRSXP || XLENGTH(names) != XLENGTH(x))
-        throw std::runtime_error("data frame columns must be named");
-      return rows;
-    }
-    SEXP rn = Rf_getAttrib(x, R_RowNamesSymbol);
-    if (TYPEOF(rn) == INTSXP && XLENGTH(rn) == 2 &&
-        INTEGER(rn)[0] == NA_INTEGER) return -static_cast<R_xlen_t>(INTEGER(rn)[1]);
-    return XLENGTH(rn);
   }
 
   static void interrupt(R_xlen_t i) {
     if ((i & 65535) == 0) glazelite::check_interrupt();
   }
 
-  template <class T> void glaze(const T& v) {
+  // Determines how an atomic vector is written. Date-times are converted by
+  // R's own formatting code; the result is protected by `guard`.
+  vec classify(SEXP x, protect_guard& guard) const {
+    vec v;
+    v.x = x;
+    bool factor = false, date = false, datetime = false;
+    SEXP cls = Rf_getAttrib(x, R_ClassSymbol);
+    if (TYPEOF(cls) == STRSXP) {
+      for (R_xlen_t i = 0, n = XLENGTH(cls); i < n; ++i) {
+        const char* name = CHAR(STRING_ELT(cls, i));
+        if (!std::strcmp(name, "AsIs")) v.asis = true;
+        else if (!std::strcmp(name, "scalar")) v.unbox = true;
+        else if (!std::strcmp(name, "factor") || !std::strcmp(name, "ordered")) factor = true;
+        else if (!std::strcmp(name, "Date")) date = true;
+        else if (!std::strcmp(name, "POSIXct") || !std::strcmp(name, "POSIXlt") ||
+                 !std::strcmp(name, "POSIXt")) datetime = true;
+        else if (std::strcmp(name, "numeric") && std::strcmp(name, "integer") &&
+                 std::strcmp(name, "character") && std::strcmp(name, "logical") &&
+                 std::strcmp(name, "json") && std::strcmp(name, "glazelite_json") &&
+                 std::strcmp(name, "noquote"))
+          throw std::runtime_error(std::string("unsupported R class: ") + name);
+      }
+    }
+    if (datetime) {
+      SEXP call = guard.add(Rf_lang2(opt_.time_format, x));
+      int failed = 0;
+      SEXP res = R_tryEvalSilent(call, R_GlobalEnv, &failed);
+      if (failed || res == nullptr)
+        throw std::runtime_error("could not convert date-time values");
+      v.x = guard.add(res);
+      if (TYPEOF(v.x) == STRSXP) v.k = kind::str;
+      else if (TYPEOF(v.x) == REALSXP)
+        v.k = opt_.posixt == options::posix::mongo ? kind::mongo : kind::real;
+      else throw std::runtime_error("could not convert date-time values");
+      return v;
+    }
+    switch (TYPEOF(x)) {
+      case LGLSXP: v.k = kind::lgl; break;
+      case INTSXP: v.k = kind::integer; break;
+      case REALSXP: v.k = kind::real; break;
+      case STRSXP: v.k = kind::str; break;
+      default: throw std::runtime_error("unsupported R type");
+    }
+    if (factor) {
+      v.levels = Rf_getAttrib(x, R_LevelsSymbol);
+      if (v.k != kind::integer || TYPEOF(v.levels) != STRSXP)
+        throw std::runtime_error("invalid factor");
+      v.k = kind::factor;
+    } else if (date) {
+      if (v.k != kind::integer && v.k != kind::real)
+        throw std::runtime_error("invalid Date");
+      if (!opt_.date_epoch) v.k = kind::date;
+    }
+    return v;
+  }
+
+  template <class T> void glaze(const T& value) {
     scratch_.clear();
-    if (auto ec = glz::write_json(v, scratch_); ec)
+    if (auto ec = glz::write_json(value, scratch_); ec)
       throw std::runtime_error("Glaze failed to encode a JSON value");
     out_.append(scratch_.data(), scratch_.size());
   }
 
   void number(double v) {
-    scratch_.clear();
-    if (auto ec = glz::write_json(v, scratch_); ec)
-      throw std::runtime_error("Glaze failed to encode a JSON number");
-    // Exponents already distinguish floating-point values from integers.
-    if (always_decimal_ && scratch_.find_first_of(".eE") == std::string::npos)
-      scratch_ += ".0";
-    out_.append(scratch_.data(), scratch_.size());
+    if (opt_.digits == NA_INTEGER) {
+      scratch_.clear();
+      if (auto ec = glz::write_json(v, scratch_); ec)
+        throw std::runtime_error("Glaze failed to encode a JSON number");
+      // Exponents already distinguish floating-point values from integers.
+      if (opt_.always_decimal && scratch_.find_first_of(".eE") == std::string::npos)
+        scratch_ += ".0";
+      out_.append(scratch_.data(), scratch_.size());
+      return;
+    }
+    // Rounded output follows jsonlite: fixed notation for ordinary values,
+    // and a number of significant digits for very large or small ones.
+    char buf[64];
+    int len;
+    const double a = std::fabs(v);
+    if (opt_.digits_signif) {
+      len = std::snprintf(buf, sizeof(buf), "%.*g", opt_.digits > 15 ? 15 : opt_.digits, v);
+    } else if (opt_.digits < 10 && a < 2147483647.0 && a > 1e-5) {
+      len = format_fixed(v, buf, opt_.digits);
+    } else {
+      const double magnitude = a > 0 ? std::ceil(std::log10(a)) : 1.0;
+      const double significant = std::fmin(17.0, std::fmax(1.0, magnitude) + opt_.digits);
+      len = std::snprintf(buf, sizeof(buf), "%.*g", static_cast<int>(significant), v);
+    }
+    if (opt_.always_decimal && std::strspn(buf, "0123456789-") == static_cast<size_t>(len)) {
+      buf[len++] = '.';
+      buf[len++] = '0';
+    }
+    out_.append(buf, static_cast<size_t>(len));
   }
 
   void string(SEXP s) {
@@ -271,57 +471,111 @@ class writer {
   }
 
   void missing(const char* label) {
-    if (na_string_) glaze(std::string_view(label));
+    if (opt_.na_string) glaze(std::string_view(label));
     else out_.literal("null");
   }
 
-  void scalar(SEXP x, R_xlen_t i) {
-    if (Rf_inherits(x, "factor")) {
-      int k = INTEGER_ELT(x, i);
-      if (k == NA_INTEGER) { missing("NA"); return; }
-      SEXP levels = Rf_getAttrib(x, R_LevelsSymbol);
-      if (k < 1 || k > XLENGTH(levels)) throw std::runtime_error("invalid factor level");
-      if (factor_integer_) glaze(k);
-      else string(STRING_ELT(levels, k - 1));
-      return;
-    }
-    if (has_unsupported_class(x)) throw std::runtime_error("unsupported R class");
-    switch (TYPEOF(x)) {
-      case STRSXP: string(STRING_ELT(x, i)); break;
-      case LGLSXP: {
-        int v = LOGICAL_ELT(x, i);
-        if (v == NA_LOGICAL) missing("NA");
-        else out_.literal(v ? "true" : "false");
-        break;
-      }
-      case INTSXP: {
-        int v = INTEGER_ELT(x, i);
-        if (v == NA_INTEGER) missing("NA");
-        else glaze(v);
-        break;
-      }
-      case REALSXP: {
-        double v = REAL_ELT(x, i);
-        if (R_IsNA(v)) missing("NA");
-        else if (R_IsNaN(v)) missing("NaN");
-        else if (std::isinf(v)) missing(v < 0 ? "-Inf" : "Inf");
-        else number(v);
-        break;
-      }
-      default: throw std::runtime_error("unsupported atomic type");
+  void date(double days) {
+    if (!std::isfinite(days) || std::fabs(days) > 1e9) { missing("NA"); return; }
+    int64_t year;
+    unsigned month, day;
+    civil_from_days(static_cast<int64_t>(std::floor(days)), year, month, day);
+    char buf[40];
+    const int len = std::snprintf(buf, sizeof(buf), "\"%04lld-%02u-%02u\"",
+                                  static_cast<long long>(year), month, day);
+    out_.append(buf, static_cast<size_t>(len));
+  }
+
+  static bool is_missing(const vec& v, R_xlen_t i) {
+    switch (v.k) {
+      case kind::lgl: return LOGICAL_ELT(v.x, i) == NA_LOGICAL;
+      case kind::integer:
+      case kind::factor: return INTEGER_ELT(v.x, i) == NA_INTEGER;
+      case kind::str: return STRING_ELT(v.x, i) == NA_STRING;
+      case kind::date:
+        if (TYPEOF(v.x) == INTSXP) return INTEGER_ELT(v.x, i) == NA_INTEGER;
+        return !std::isfinite(REAL_ELT(v.x, i));
+      default: return !std::isfinite(REAL_ELT(v.x, i));
     }
   }
 
+  void scalar(const vec& v, R_xlen_t i) {
+    switch (v.k) {
+      case kind::str: string(STRING_ELT(v.x, i)); break;
+      case kind::lgl: {
+        const int value = LOGICAL_ELT(v.x, i);
+        if (value == NA_LOGICAL) missing("NA");
+        else out_.literal(value ? "true" : "false");
+        break;
+      }
+      case kind::integer: {
+        const int value = INTEGER_ELT(v.x, i);
+        if (value == NA_INTEGER) missing("NA");
+        else glaze(value);
+        break;
+      }
+      case kind::real: {
+        const double value = REAL_ELT(v.x, i);
+        if (R_IsNA(value)) missing("NA");
+        else if (R_IsNaN(value)) missing("NaN");
+        else if (std::isinf(value)) missing(value < 0 ? "-Inf" : "Inf");
+        else number(value);
+        break;
+      }
+      case kind::factor: {
+        const int code = INTEGER_ELT(v.x, i);
+        if (code == NA_INTEGER) { missing("NA"); break; }
+        if (code < 1 || code > XLENGTH(v.levels)) throw std::runtime_error("invalid factor level");
+        if (opt_.factor_integer) glaze(code);
+        else string(STRING_ELT(v.levels, code - 1));
+        break;
+      }
+      case kind::date: {
+        if (TYPEOF(v.x) == INTSXP) {
+          const int days = INTEGER_ELT(v.x, i);
+          if (days == NA_INTEGER) missing("NA");
+          else date(days);
+        } else {
+          date(REAL_ELT(v.x, i));
+        }
+        break;
+      }
+      case kind::mongo: {
+        const double ms = REAL_ELT(v.x, i);
+        if (!std::isfinite(ms)) { out_.literal("null"); break; }
+        out_.literal("{\"$date\":");
+        glaze(ms);
+        out_.put('}');
+        break;
+      }
+    }
+  }
+
+  void vector(const vec& v, R_xlen_t n) {
+    out_.put('[');
+    for (R_xlen_t i = 0; i < n; ++i) {
+      if (i) separator();
+      scalar(v, i);
+      interrupt(i);
+    }
+    out_.put(']');
+  }
+
   void object(SEXP x, SEXP names, unsigned depth) {
+    if (TYPEOF(names) != STRSXP || XLENGTH(names) != XLENGTH(x))
+      throw std::runtime_error("invalid names");
     out_.put('{');
     for (R_xlen_t i = 0, n = XLENGTH(x); i < n; ++i) {
       if (i) out_.put(',');
       newline(depth + 1);
       SEXP name = STRING_ELT(names, i);
-      if (name == NA_STRING || !std::strlen(CHAR(name)))
-        throw std::runtime_error("object names must be nonempty and non-missing");
-      string(name);
-      out_.literal(pretty_ ? ": " : ":");
+      if (name == NA_STRING || !std::strlen(CHAR(name))) {
+        // As in jsonlite, an element without a name is keyed by its position.
+        glaze(std::to_string(i + 1));
+      } else {
+        string(name);
+      }
+      colon();
       value(VECTOR_ELT(x, i), depth + 1);
       interrupt(i);
     }
@@ -329,16 +583,70 @@ class writer {
     out_.put('}');
   }
 
-  void frame_row(SEXP x, R_xlen_t row, unsigned depth) {
-    SEXP names = Rf_getAttrib(x, R_NamesSymbol);
-    const bool values = dataframe_ == "values";
+  // Checks a data frame and prepares its columns for row-wise writing. All
+  // columns must provide the same number of rows, so that the row writers
+  // never index past the end of a column.
+  frame_info prepare_frame(SEXP x, protect_guard& guard, unsigned depth) const {
+    if (depth > 1000) throw std::runtime_error("JSON nesting is too deep");
+    if (TYPEOF(x) != VECSXP) throw std::runtime_error("invalid data frame");
+    frame_info f;
+    const R_xlen_t ncol = XLENGTH(x);
+    f.names = Rf_getAttrib(x, R_NamesSymbol);
+    if (ncol > 0 && (TYPEOF(f.names) != STRSXP || XLENGTH(f.names) != ncol))
+      throw std::runtime_error("data frame columns must be named");
+    // Automatic row names are expanded into a new vector, so protect them.
+    SEXP row_names = guard.add(Rf_getAttrib(x, R_RowNamesSymbol));
+    f.cols.resize(static_cast<size_t>(ncol));
+    for (R_xlen_t j = 0; j < ncol; ++j) {
+      column& col = f.cols[static_cast<size_t>(j)];
+      col.x = VECTOR_ELT(x, j);
+      R_xlen_t rows;
+      SEXP dim = Rf_getAttrib(col.x, R_DimSymbol);
+      if (Rf_inherits(col.x, "data.frame")) {
+        col.nested = std::make_unique<frame_info>(prepare_frame(col.x, guard, depth + 1));
+        rows = col.nested->rows;
+      } else if (TYPEOF(col.x) == VECSXP && !Rf_inherits(col.x, "POSIXlt")) {
+        if (dim != R_NilValue)
+          throw std::runtime_error("data frame columns with dimensions must be atomic matrices");
+        col.is_list = true;
+        rows = XLENGTH(col.x);
+      } else {
+        col.v = classify(col.x, guard);
+        if (dim != R_NilValue) {
+          if (TYPEOF(dim) != INTSXP || XLENGTH(dim) != 2 ||
+              INTEGER(dim)[0] < 0 || INTEGER(dim)[1] < 0 ||
+              static_cast<R_xlen_t>(INTEGER(dim)[0]) * INTEGER(dim)[1] != XLENGTH(col.v.x))
+            throw std::runtime_error("data frame columns with dimensions must be atomic matrices");
+          col.is_matrix = true;
+          col.nrow = INTEGER(dim)[0];
+          col.ncol = INTEGER(dim)[1];
+          rows = col.nrow;
+        } else {
+          rows = XLENGTH(col.v.x);
+        }
+      }
+      if (j == 0) f.rows = rows;
+      else if (rows != f.rows)
+        throw std::runtime_error("data frame columns differ in their number of rows");
+    }
+    if (ncol == 0) f.rows = row_names == R_NilValue ? 0 : XLENGTH(row_names);
+    // Character row names are data and are written as "_row", as in jsonlite.
+    if (opt_.rownames != 0 && row_names != R_NilValue && XLENGTH(row_names) == f.rows &&
+        (TYPEOF(row_names) == STRSXP || (opt_.rownames == 1 && TYPEOF(row_names) == INTSXP)))
+      f.row_names = row_names;
+    return f;
+  }
+
+  void row_name(const frame_info& f, R_xlen_t row) {
+    if (TYPEOF(f.row_names) == STRSXP) string(STRING_ELT(f.row_names, row));
+    else glaze(INTEGER_ELT(f.row_names, row));
+  }
+
+  void frame_row(const frame_info& f, R_xlen_t row, unsigned depth) {
+    const bool values = opt_.dataframe == options::layout::values;
     out_.put(values ? '[' : '{');
     bool first = true;
-    for (R_xlen_t col = 0, n = XLENGTH(x); col < n; ++col) {
-      SEXP column = VECTOR_ELT(x, col);
-      const bool matrix = is_matrix_column(column);
-      if (!values && !na_string_ && TYPEOF(column) != VECSXP && !matrix &&
-          cell_missing(column, row)) continue;
+    auto begin_field = [&](SEXP name) {
       if (!first) {
         if (values) separator();
         else out_.put(',');
@@ -346,78 +654,104 @@ class writer {
       first = false;
       if (!values) {
         newline(depth + 1);
-        string(STRING_ELT(names, col));
-        out_.literal(pretty_ ? ": " : ":");
+        string(name);
+        colon();
       }
-      if (Rf_inherits(column, "data.frame")) {
+    };
+    for (size_t j = 0; j < f.cols.size(); ++j) {
+      const column& col = f.cols[j];
+      const bool plain = !col.nested && !col.is_list && !col.is_matrix;
+      // Missing fields are omitted from records, as in jsonlite.
+      if (plain && !values && !opt_.na_string && is_missing(col.v, row)) continue;
+      begin_field(STRING_ELT(f.names, static_cast<R_xlen_t>(j)));
+      if (col.nested) {
         // A data-frame column contributes its own row as a nested record.
-        frame_row(column, row, depth + 1);
-      } else if (TYPEOF(column) == VECSXP) {
-        value(VECTOR_ELT(column, row), depth + 1);
-      } else if (matrix) {
+        frame_row(*col.nested, row, depth + 1);
+      } else if (col.is_list) {
+        value(VECTOR_ELT(col.x, row), depth + 1);
+      } else if (col.is_matrix) {
         // A matrix column contributes its row as an array.
-        const R_xlen_t nrow = INTEGER(Rf_getAttrib(column, R_DimSymbol))[0];
-        const R_xlen_t ncol = INTEGER(Rf_getAttrib(column, R_DimSymbol))[1];
         out_.put('[');
-        for (R_xlen_t j = 0; j < ncol; ++j) {
-          if (j) separator();
-          scalar(column, row + j * nrow);
+        for (R_xlen_t k = 0; k < col.ncol; ++k) {
+          if (k) separator();
+          scalar(col.v, row + k * col.nrow);
         }
         out_.put(']');
       } else {
-        scalar(column, row);
+        scalar(col.v, row);
       }
+    }
+    if (f.row_names != R_NilValue) {
+      if (!first) {
+        if (values) separator();
+        else out_.put(',');
+      }
+      first = false;
+      if (!values) {
+        newline(depth + 1);
+        out_.literal("\"_row\"");
+        colon();
+      }
+      row_name(f, row);
     }
     if (!values && !first) newline(depth);
     out_.put(values ? ']' : '}');
   }
 
-  static bool cell_missing(SEXP x, R_xlen_t i) {
-    switch (TYPEOF(x)) {
-      case LGLSXP: return LOGICAL_ELT(x, i) == NA_LOGICAL;
-      case INTSXP: return INTEGER_ELT(x, i) == NA_INTEGER;
-      case REALSXP: return !std::isfinite(REAL_ELT(x, i));
-      case STRSXP: return STRING_ELT(x, i) == NA_STRING;
-      default: return false;
-    }
-  }
-
   void frame(SEXP x, unsigned depth) {
-    const R_xlen_t rows = frame_rows(x);
-    const R_xlen_t cols = XLENGTH(x);
-    if (dataframe_ == "columns") {
-      SEXP names = Rf_getAttrib(x, R_NamesSymbol);
+    protect_guard guard;
+    const frame_info f = prepare_frame(x, guard, depth);
+    if (opt_.dataframe == options::layout::columns) {
       out_.put('{');
-      for (R_xlen_t c = 0; c < cols; ++c) {
-        if (c) out_.put(',');
+      bool first = true;
+      for (size_t j = 0; j < f.cols.size(); ++j) {
+        const column& col = f.cols[j];
+        if (!first) out_.put(',');
+        first = false;
         newline(depth + 1);
-        string(STRING_ELT(names, c));
-        out_.literal(pretty_ ? ": " : ":");
-        value(VECTOR_ELT(x, c), depth + 1, true);
+        string(STRING_ELT(f.names, static_cast<R_xlen_t>(j)));
+        colon();
+        if (!col.nested && !col.is_list && !col.is_matrix) vector(col.v, f.rows);
+        else value(col.x, depth + 1, true);
       }
-      if (cols) newline(depth);
+      if (f.row_names != R_NilValue) {
+        if (!first) out_.put(',');
+        first = false;
+        newline(depth + 1);
+        out_.literal("\"_row\"");
+        colon();
+        out_.put('[');
+        for (R_xlen_t i = 0; i < f.rows; ++i) {
+          if (i) separator();
+          row_name(f, i);
+        }
+        out_.put(']');
+      }
+      if (!first) newline(depth);
       out_.put('}');
       return;
     }
     out_.put('[');
-    for (R_xlen_t r = 0; r < rows; ++r) {
+    for (R_xlen_t r = 0; r < f.rows; ++r) {
       if (r) out_.put(',');
       newline(depth + 1);
-      frame_row(x, r, depth + 1);
+      frame_row(f, r, depth + 1);
       interrupt(r);
     }
-    if (rows) newline(depth);
+    if (f.rows) newline(depth);
     out_.put(']');
   }
 
   void array(SEXP x, SEXP dim, unsigned depth) {
-    if (!atomic(x) || has_unsupported_class(x))
-      throw std::runtime_error("unsupported array type");
+    if (TYPEOF(x) == VECSXP) throw std::runtime_error("unsupported array type");
+    protect_guard guard;
+    const vec v = classify(x, guard);
     if (TYPEOF(dim) != INTSXP || XLENGTH(dim) == 0)
       throw std::runtime_error("invalid array dimensions");
     const R_xlen_t ndim = XLENGTH(dim);
     if (ndim > 1000 || depth > 1000 - ndim)
       throw std::runtime_error("JSON nesting is too deep");
+    const R_xlen_t length = XLENGTH(v.x);
     std::vector<R_xlen_t> strides(static_cast<size_t>(ndim), 0);
     R_xlen_t size = 1;
     for (R_xlen_t axis = 0; axis < ndim; ++axis) {
@@ -426,18 +760,18 @@ class writer {
         throw std::runtime_error("invalid array dimensions");
       // An empty array never indexes data. Avoid overflow even when zero
       // dimensions accompany large, otherwise unrepresentable products.
-      if (XLENGTH(x) == 0) continue;
-      strides[axis] = size;
+      if (length == 0) continue;
+      strides[static_cast<size_t>(axis)] = size;
       if (n && size > R_XLEN_T_MAX / n)
         throw std::runtime_error("array dimensions are too large");
       size *= n;
     }
-    if (XLENGTH(x) != 0 && size != XLENGTH(x))
+    if (length != 0 && size != length)
       throw std::runtime_error("array dimensions do not match its length");
-    array_level(x, dim, strides, 0, 0, depth);
+    array_level(v, dim, strides, 0, 0, depth);
   }
 
-  void array_level(SEXP x, SEXP dim, const std::vector<R_xlen_t>& strides,
+  void array_level(const vec& v, SEXP dim, const std::vector<R_xlen_t>& strides,
                    R_xlen_t axis, R_xlen_t offset, unsigned depth) {
     const R_xlen_t n = INTEGER(dim)[axis];
     const bool leaf = axis + 1 == XLENGTH(dim);
@@ -447,11 +781,11 @@ class writer {
         if (leaf) separator();
         else out_.put(',');
       }
-      const R_xlen_t index = offset + i * strides[axis];
-      if (leaf) scalar(x, index);
+      const R_xlen_t index = offset + i * strides[static_cast<size_t>(axis)];
+      if (leaf) scalar(v, index);
       else {
         newline(depth + 1);
-        array_level(x, dim, strides, axis + 1, index, depth + 1);
+        array_level(v, dim, strides, axis + 1, index, depth + 1);
       }
       interrupt(++array_steps_);
     }
@@ -460,78 +794,65 @@ class writer {
   }
 };
 
-void check_options(SEXP path, SEXP unbox, SEXP df, SEXP na,
-                   SEXP factor, SEXP decimal, SEXP pretty = R_NilValue) {
-  if (path != R_NilValue && (TYPEOF(path) != STRSXP || XLENGTH(path) != 1 ||
-      STRING_ELT(path, 0) == NA_STRING))
+const char* path_option(SEXP path) {
+  if (TYPEOF(path) != STRSXP || XLENGTH(path) != 1 || STRING_ELT(path, 0) == NA_STRING)
     throw std::runtime_error("path must be one string");
-  if (TYPEOF(unbox) != LGLSXP || XLENGTH(unbox) != 1 ||
-      LOGICAL(unbox)[0] == NA_LOGICAL)
-    throw std::runtime_error("auto_unbox must be TRUE or FALSE");
-  if (TYPEOF(df) != STRSXP || XLENGTH(df) != 1 ||
-      STRING_ELT(df, 0) == NA_STRING ||
-      TYPEOF(na) != STRSXP || XLENGTH(na) != 1 ||
-      STRING_ELT(na, 0) == NA_STRING ||
-      TYPEOF(factor) != STRSXP || XLENGTH(factor) != 1 ||
-      STRING_ELT(factor, 0) == NA_STRING)
-    throw std::runtime_error("invalid JSON options");
-  if (TYPEOF(decimal) != LGLSXP || XLENGTH(decimal) != 1 ||
-      LOGICAL(decimal)[0] == NA_LOGICAL)
-    throw std::runtime_error("always_decimal must be TRUE or FALSE");
-  if (pretty != R_NilValue && (TYPEOF(pretty) != LGLSXP || XLENGTH(pretty) != 1 ||
-      LOGICAL(pretty)[0] == NA_LOGICAL))
-    throw std::runtime_error("pretty must be TRUE or FALSE");
+  return Rf_translateChar(STRING_ELT(path, 0));
+}
+
+SEXP as_r_string(const std::string& s) {
+  return Rf_ScalarString(Rf_mkCharLenCE(s.data(), static_cast<int>(s.size()), CE_UTF8));
 }
 
 }  // namespace
 
-extern "C" SEXP glazelite_to_json(SEXP x, SEXP unbox, SEXP df, SEXP na,
-                                  SEXP factor, SEXP decimal, SEXP pretty) {
+extern "C" SEXP glazelite_to_json(SEXP x, SEXP opts) {
   return glazelite::guarded([&]() -> SEXP {
-    check_options(R_NilValue, unbox, df, na, factor, decimal, pretty);
+    const options opt(opts);
     output out;
-    writer w(out, LOGICAL(unbox)[0], CHAR(STRING_ELT(df, 0)),
-             CHAR(STRING_ELT(na, 0)), CHAR(STRING_ELT(factor, 0)),
-             LOGICAL(decimal)[0], LOGICAL(pretty)[0]);
+    writer w(out, opt);
     w.value(x);
-    const auto& s = out.str();
-    return Rf_ScalarString(Rf_mkCharLenCE(s.data(), static_cast<int>(s.size()), CE_UTF8));
+    return as_r_string(out.str());
   });
 }
 
-extern "C" SEXP glazelite_write_json(SEXP x, SEXP path, SEXP unbox,
-                                      SEXP df, SEXP na, SEXP factor,
-                                      SEXP decimal, SEXP pretty) {
+extern "C" SEXP glazelite_write_json(SEXP x, SEXP path, SEXP opts) {
   return glazelite::guarded([&]() -> SEXP {
-    check_options(path, unbox, df, na, factor, decimal, pretty);
-    output out(Rf_translateChar(STRING_ELT(path, 0)));
-    writer w(out, LOGICAL(unbox)[0], CHAR(STRING_ELT(df, 0)),
-             CHAR(STRING_ELT(na, 0)), CHAR(STRING_ELT(factor, 0)),
-             LOGICAL(decimal)[0], LOGICAL(pretty)[0]);
+    const options opt(opts);
+    output out(path_option(path));
+    writer w(out, opt);
     w.value(x);
-    if (LOGICAL(pretty)[0]) out.put('\n');
+    if (opt.indent >= 0) out.put('\n');
     out.finish();
     return R_NilValue;
   });
 }
 
-extern "C" SEXP glazelite_stream_batch(SEXP x, SEXP path, SEXP unbox,
-                                        SEXP na, SEXP append, SEXP factor,
-                                        SEXP decimal) {
-  SEXP df = PROTECT(Rf_mkString("rows"));
-  SEXP result = glazelite::guarded([&]() -> SEXP {
-    check_options(path, unbox, df, na, factor, decimal);
-    if (TYPEOF(append) != LGLSXP || XLENGTH(append) != 1 ||
-        LOGICAL(append)[0] == NA_LOGICAL)
-      throw std::runtime_error("append must be TRUE or FALSE");
-    output out(Rf_translateChar(STRING_ELT(path, 0)),
-               LOGICAL(append)[0] == TRUE);
-    writer w(out, LOGICAL(unbox)[0], "rows", CHAR(STRING_ELT(na, 0)),
-             CHAR(STRING_ELT(factor, 0)), LOGICAL(decimal)[0]);
-    w.stream_batch(x);
+// Writes the records of one batch as newline-delimited JSON. With a path
+// they are appended to that file; without one they are returned as a string.
+// `range` holds the first and the last record to write (one-based), or is
+// NULL for the whole batch.
+extern "C" SEXP glazelite_stream_batch(SEXP x, SEXP path, SEXP opts, SEXP range) {
+  return glazelite::guarded([&]() -> SEXP {
+    const options opt(opts);
+    R_xlen_t from = 0, to = -1;
+    if (range != R_NilValue) {
+      if (TYPEOF(range) != REALSXP || XLENGTH(range) != 2 ||
+          !(REAL(range)[0] >= 1) || !(REAL(range)[1] >= 0))
+        throw std::runtime_error("invalid record range");
+      from = static_cast<R_xlen_t>(REAL(range)[0]) - 1;
+      to = static_cast<R_xlen_t>(REAL(range)[1]);
+    }
+    if (path == R_NilValue) {
+      output out;
+      writer w(out, opt);
+      w.stream_batch(x, from, to);
+      return as_r_string(out.str());
+    }
+    output out(path_option(path), true);
+    writer w(out, opt);
+    w.stream_batch(x, from, to);
     out.finish();
     return R_NilValue;
   });
-  UNPROTECT(1);
-  return result;
 }

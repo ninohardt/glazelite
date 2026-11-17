@@ -49,7 +49,7 @@ stopifnot(identical(readLines(path), rep(c('{"code":2,"value":1.0}',
 original <- readChar(path, file.info(path)$size, useBytes = TRUE)
 for (options in list(list(always_decimal = NA), list(always_decimal = 1),
                      list(pretty = NA), list(pretty = c(TRUE, FALSE)),
-                     list(factor = "invalid"), list(digits = 4),
+                     list(factor = "invalid"), list(digits = -1), list(digits = c(1, 2)),
                      list(digits = numeric()), list(digits = "NA"))) {
   result <- try(do.call(write_json, c(list(x = x, path = path), options)), silent = TRUE)
   stopifnot(inherits(result, "try-error"))

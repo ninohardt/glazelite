@@ -9,6 +9,8 @@
 #'   incremental, so a document may be larger than a single R string.
 #' * [stream_out()] and [stream_in()] write and read newline-delimited JSON
 #'   (NDJSON) in batches.
+#' * [prettify()], [minify()] and [validate()] reformat and check JSON text,
+#'   and [unbox()] marks single values that are written as scalars.
 #'
 #' @section Credits:
 #' All JSON encoding and parsing is done by Glaze, which is bundled with the

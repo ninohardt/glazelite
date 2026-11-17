@@ -4,7 +4,12 @@
 \alias{read_json}
 \title{Parse a JSON file with Glaze}
 \usage{
-read_json(path, simplifyVector = TRUE, simplifyDataFrame = TRUE)
+read_json(
+  path,
+  simplifyVector = FALSE,
+  simplifyDataFrame = simplifyVector,
+  simplifyMatrix = simplifyVector
+)
 }
 \arguments{
 \item{path}{Input file path.}
@@ -13,21 +18,30 @@ read_json(path, simplifyVector = TRUE, simplifyDataFrame = TRUE)
 
 \item{simplifyDataFrame}{Simplify arrays of records to data frames. Has no
 effect unless \code{simplifyVector} is also \code{TRUE}.}
+
+\item{simplifyMatrix}{Simplify regular arrays of arrays to matrices and
+higher-dimensional arrays. Has no effect unless \code{simplifyVector} is also
+\code{TRUE}.}
 }
 \value{
-An R object: a named list for a JSON object, a list, atomic vector
-or data frame for a JSON array, a length-one vector for a JSON scalar, and
-\code{NULL} for JSON \code{null}.
+An R object: a named list for a JSON object; a list, atomic vector,
+matrix, array or data frame for a JSON array; a length-one vector for a
+JSON scalar; and \code{NULL} for JSON \code{null}.
 }
 \description{
 This avoids loading the file as an R string, but the parsed R object still
 occupies memory. A JSON token longer than the native input window is not
 supported; use \code{\link[jsonlite:stream_in]{jsonlite::stream_in()}} for NDJSON records.
 }
+\details{
+As in jsonlite, \code{read_json()} returns nested lists unless
+\code{simplifyVector = TRUE}.
+}
 \examples{
 path <- tempfile(fileext = ".json")
 write_json(list(id = 1L, values = c(1.5, 2.5)), path, auto_unbox = TRUE)
 read_json(path)
+read_json(path, simplifyVector = TRUE)
 unlink(path)
 }
 \seealso{

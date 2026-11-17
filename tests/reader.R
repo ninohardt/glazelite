@@ -35,7 +35,8 @@ same("[null, null]", list(NULL, NULL))
 same('[1, "a"]', list(1L, "a"))
 same("[true, 1]", list(TRUE, 1L))
 same("[[1, 2], [3]]", list(1:2, 3L))
-same("[[1], [2]]", list(1L, 2L))
+same("[[1], [2]]", matrix(1:2, 2, 1))
+same("[[1], [2]]", list(1L, 2L), simplifyMatrix = FALSE)
 same("[1, [2]]", list(1L, 2L))
 same("[1, 2]", list(1L, 2L), simplifyVector = FALSE)
 
@@ -99,7 +100,8 @@ df <- data.frame(id = seq_len(n), x = seq_len(n) / 7, flag = seq_len(n) %% 3L ==
 df$x[5] <- NA
 df$label[7] <- NA
 write_json(df, path)
-stopifnot(identical(read_json(path), df), identical(fromJSON(toJSON(df)), df))
+stopifnot(identical(read_json(path, simplifyVector = TRUE), df),
+          identical(fromJSON(toJSON(df)), df))
 
 # NDJSON: records are simplified together, or page by page with a handler
 writeLines(c('{"a": 1, "b": "x"}', "", "   ", '{"a": 2}', '{"b": "z", "a": 3.5}'), path)

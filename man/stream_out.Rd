@@ -4,42 +4,35 @@
 \alias{stream_out}
 \title{Stream batches as newline-delimited JSON}
 \usage{
-stream_out(
-  x,
-  path,
-  auto_unbox = TRUE,
-  na = c("null", "string"),
-  factor = c("string", "integer"),
-  always_decimal = FALSE,
-  digits = NA
-)
+stream_out(x, con, pagesize = 500L, verbose = FALSE, ...)
 }
 \arguments{
 \item{x}{A data frame, list of records, or batch-producing function.}
 
-\item{path}{Destination file path.}
+\item{con}{A file path or a connection, for example \code{gzfile("x.json.gz")}.}
 
-\item{auto_unbox}{Whether length-one atomic vectors become scalars.}
+\item{pagesize}{Number of records written to a connection at a time.}
 
-\item{na}{Encode missing and non-finite values as JSON null or as strings.}
+\item{verbose}{Accepted for compatibility with jsonlite and ignored.}
 
-\item{factor}{Encode factors as level labels (\code{"string"}, the default) or
-integer level indices (\code{"integer"}).}
-
-\item{always_decimal}{Distinguish doubles from integers by retaining a decimal
-point or exponent in finite double output.}
-
-\item{digits}{Must be \code{NA}. Numbers retain full round-trip precision;
-rounding to a specified number of digits is not implemented.}
+\item{...}{Options passed on to \code{\link[jsonlite:fromJSON]{jsonlite::toJSON()}}, such as \code{digits}, \code{factor} or
+\code{na}. \code{auto_unbox} defaults to \code{TRUE} here, and every record is written
+on one line.}
 }
 \value{
-The path, invisibly.
+The path, invisibly, or \code{NULL} when writing to a connection.
 }
 \description{
 \code{x} may be a data frame, a list of records, or a zero-argument function
 returning successive batches and finally \code{NULL}. Each data-frame row or
 list element is written as one JSON record. This never creates the full
 output as an R string.
+}
+\details{
+When \code{con} is a file path, the records are written to a temporary file in
+the same directory, which is moved into place once it is complete. When
+\code{con} is a connection, the records are written to it \code{pagesize} at a time;
+a connection that is not yet open is opened and closed again.
 }
 \examples{
 path <- tempfile(fileext = ".ndjson")
@@ -56,7 +49,12 @@ stream_out(function() {
   data.frame(batch = i, value = c(0.5, 1.5))
 }, path)
 stream_in(path)
-unlink(path)
+
+# A connection, here compressed
+zipped <- tempfile(fileext = ".ndjson.gz")
+stream_out(data.frame(id = 1:3), gzfile(zipped))
+stream_in(gzfile(zipped))
+unlink(c(path, zipped))
 }
 \seealso{
 \code{\link[jsonlite:stream_in]{jsonlite::stream_in()}} to read newline-delimited JSON.

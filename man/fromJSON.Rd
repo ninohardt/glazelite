@@ -4,7 +4,12 @@
 \alias{fromJSON}
 \title{Parse JSON text with Glaze}
 \usage{
-fromJSON(txt, simplifyVector = TRUE, simplifyDataFrame = TRUE)
+fromJSON(
+  txt,
+  simplifyVector = TRUE,
+  simplifyDataFrame = simplifyVector,
+  simplifyMatrix = simplifyVector
+)
 }
 \arguments{
 \item{txt}{A length-one JSON string. If it names an existing file, that
@@ -14,16 +19,20 @@ file is read with \code{\link[jsonlite:read_json]{jsonlite::read_json()}}.}
 
 \item{simplifyDataFrame}{Simplify arrays of records to data frames. Has no
 effect unless \code{simplifyVector} is also \code{TRUE}.}
+
+\item{simplifyMatrix}{Simplify regular arrays of arrays to matrices and
+higher-dimensional arrays. Has no effect unless \code{simplifyVector} is also
+\code{TRUE}.}
 }
 \value{
-An R object: a named list for a JSON object, a list, atomic vector
-or data frame for a JSON array, a length-one vector for a JSON scalar, and
-\code{NULL} for JSON \code{null}.
+An R object: a named list for a JSON object; a list, atomic vector,
+matrix, array or data frame for a JSON array; a length-one vector for a
+JSON scalar; and \code{NULL} for JSON \code{null}.
 }
 \description{
 JSON objects become named lists, arrays become lists or, when simplified,
-atomic vectors and data frames. JSON \code{null} becomes \code{NULL}, or \code{NA} inside a
-simplified vector or data frame.
+atomic vectors, matrices and data frames. JSON \code{null} becomes \code{NULL}, or
+\code{NA} inside a simplified vector, matrix or data frame.
 }
 \section{Simplification}{
 
@@ -31,19 +40,23 @@ With \code{simplifyVector = TRUE}, an array whose elements are all strings, all
 booleans or all numbers (apart from \code{null}) becomes a character, logical,
 integer or double vector. Numbers are integers when every one of them is a
 whole number that fits R's integer type, and doubles otherwise. Arrays that
-mix these types, contain nested arrays or objects, or contain only \code{null}
-stay lists.
+mix these types, contain objects, or contain only \code{null} stay lists.
 
-With \code{simplifyDataFrame = TRUE} (which also requires
-\code{simplifyVector = TRUE}), an array of objects becomes a data frame when
-every field holds scalars of one type. Fields missing from a record are
-\code{NA}. Arrays of objects with nested or mixed-type fields stay lists of
+With \code{simplifyMatrix = TRUE}, arrays of equally long arrays of scalars of
+one type become a matrix, with one row per inner array. Deeper regular
+nestings become arrays of three or more dimensions. This reverses what
+\code{\link[jsonlite:fromJSON]{jsonlite::toJSON()}} writes for a matrix or an array.
+
+With \code{simplifyDataFrame = TRUE}, an array of objects becomes a data frame
+when every field holds scalars of one type. Fields missing from a record
+are \code{NA}. Arrays of objects with nested or mixed-type fields stay lists of
 records.
 }
 
 \examples{
 fromJSON('{"id": 1, "tags": ["a", "b"], "ok": true}')
 fromJSON('[1, 2.5, null]')
+fromJSON('[[1, 2, 3], [4, 5, 6]]')
 fromJSON('[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]')
 fromJSON('[{"id": 1}, {"id": 2}]', simplifyDataFrame = FALSE)
 }

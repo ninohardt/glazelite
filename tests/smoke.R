@@ -15,7 +15,7 @@ assert_json(df, expected)
 path <- tempfile(fileext = ".json")
 write_json(df, path)
 stopifnot(identical(readChar(path, file.info(path)$size), expected))
-stopifnot(identical(read_json(path), df))
+stopifnot(identical(read_json(path, simplifyVector = TRUE), df))
 
 long <- paste0(strrep("a", 8192), '"\\\n\u2603')
 write_json(list(text = long), path, auto_unbox = TRUE)
@@ -33,7 +33,7 @@ stream_in(path, handler = function(page) seen <<- seen + nrow(page), pagesize = 
 stopifnot(seen == 6L)
 
 old <- readChar(path, file.info(path)$size)
-stopifnot(inherits(try(write_json(Sys.Date(), path), silent = TRUE), "try-error"))
+stopifnot(inherits(try(write_json(1i, path), silent = TRUE), "try-error"))
 stopifnot(identical(readChar(path, file.info(path)$size), old))
 unlink(path)
 
@@ -51,7 +51,7 @@ for (txt in bad) {
 for (txt in names(good)) {
   stopifnot(identical(fromJSON(txt), good[[txt]]))
   writeBin(charToRaw(txt), path)
-  stopifnot(identical(read_json(path), good[[txt]]))
+  stopifnot(identical(read_json(path, simplifyVector = TRUE), good[[txt]]))
 }
 stopifnot(is.null(fromJSON("null")))
 writeBin(charToRaw(" null\n"), path)

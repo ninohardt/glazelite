@@ -5,15 +5,17 @@
 \title{Read newline-delimited JSON in pages}
 \usage{
 stream_in(
-  path,
+  con,
   handler = NULL,
   pagesize = 500L,
+  verbose = FALSE,
   simplifyVector = TRUE,
-  simplifyDataFrame = TRUE
+  simplifyDataFrame = simplifyVector,
+  simplifyMatrix = simplifyVector
 )
 }
 \arguments{
-\item{path}{An input path or an R connection. A connection that is not yet
+\item{con}{An input path or an R connection. A connection that is not yet
 open is opened for reading and closed again on exit.}
 
 \item{handler}{Optional function called for each page. When absent, pages
@@ -21,10 +23,16 @@ are collected and returned.}
 
 \item{pagesize}{Number of lines read per page when a \code{handler} is given.}
 
+\item{verbose}{Accepted for compatibility with jsonlite and ignored.}
+
 \item{simplifyVector}{Simplify arrays of scalar values to atomic vectors.}
 
 \item{simplifyDataFrame}{Simplify arrays of records to data frames. Has no
 effect unless \code{simplifyVector} is also \code{TRUE}.}
+
+\item{simplifyMatrix}{Simplify regular arrays of arrays to matrices and
+higher-dimensional arrays. Has no effect unless \code{simplifyVector} is also
+\code{TRUE}.}
 }
 \value{
 Without a \code{handler}, the collected records: a data frame when all

@@ -111,8 +111,9 @@ struct column {
 
 class converter {
  public:
-  converter(bool simplify_vector, bool simplify_data_frame)
-      : vector_(simplify_vector), frame_(simplify_vector && simplify_data_frame) {}
+  converter(bool simplify_vector, bool simplify_data_frame, bool simplify_matrix)
+      : vector_(simplify_vector), frame_(simplify_vector && simplify_data_frame),
+        matrix_(simplify_vector && simplify_matrix) {}
 
   SEXP value(const json& v, unsigned depth = 0) {
     if (depth > 1000) throw std::runtime_error("JSON nesting is too deep");
@@ -137,6 +138,8 @@ class converter {
       SEXP out = R_NilValue;
       if (a[0].get_if<object_t>()) {
         if (frame_) out = frame(a);
+      } else if (a[0].get_if<array_t>()) {
+        if (matrix_) out = matrix(a);
       } else if (vector_) {
         out = atomic(a);
       }
@@ -154,6 +157,7 @@ class converter {
  private:
   bool vector_;
   bool frame_;
+  bool matrix_;
   size_t ticks_ = 0;
 
   void tick() {
@@ -198,6 +202,73 @@ class converter {
     }
     UNPROTECT(1);
     return out;
+  }
+
+  // A regular nesting of arrays whose innermost elements are scalars of one
+  // type becomes a matrix or a higher-dimensional array. The outermost JSON
+  // array runs along the first dimension, which is how toJSON() writes
+  // arrays. Returns R_NilValue when the array does not qualify.
+  SEXP matrix(const array_t& a) {
+    std::vector<size_t> dims;
+    const array_t* level = &a;
+    for (;;) {
+      if (level->empty() || level->size() > static_cast<size_t>(INT_MAX) ||
+          dims.size() >= 64) return R_NilValue;
+      dims.push_back(level->size());
+      const array_t* next = (*level)[0].get_if<array_t>();
+      if (next == nullptr) break;
+      level = next;
+    }
+    if (dims.size() < 2) return R_NilValue;
+    scalar_types types;
+    if (!regular(a, dims, 0, types) || !types.any()) return R_NilValue;
+    const SEXPTYPE type = types.sexptype();
+    if (type == NILSXP) return R_NilValue;
+    R_xlen_t total = 1;
+    for (size_t d : dims) {
+      if (total > R_XLEN_T_MAX / static_cast<R_xlen_t>(d)) return R_NilValue;
+      total *= static_cast<R_xlen_t>(d);
+    }
+    SEXP out = PROTECT(Rf_allocVector(type, total));
+    column col;
+    col.attach(out, total);
+    fill(a, dims, 0, 0, 1, col);
+    SEXP dim = PROTECT(Rf_allocVector(INTSXP, static_cast<R_xlen_t>(dims.size())));
+    for (size_t i = 0; i < dims.size(); ++i) INTEGER(dim)[i] = static_cast<int>(dims[i]);
+    Rf_setAttrib(out, R_DimSymbol, dim);
+    UNPROTECT(2);
+    return out;
+  }
+
+  bool regular(const array_t& a, const std::vector<size_t>& dims, size_t level,
+               scalar_types& types) {
+    if (a.size() != dims[level]) return false;
+    tick();
+    if (level + 1 == dims.size()) {
+      for (const json& v : a) {
+        if (!types.add(v)) return false;
+      }
+      return true;
+    }
+    for (const json& v : a) {
+      const array_t* inner = v.get_if<array_t>();
+      if (inner == nullptr || !regular(*inner, dims, level + 1, types)) return false;
+    }
+    return true;
+  }
+
+  // R arrays are stored with the first index varying fastest.
+  void fill(const array_t& a, const std::vector<size_t>& dims, size_t level,
+            R_xlen_t offset, R_xlen_t stride, column& col) {
+    if (level + 1 == dims.size()) {
+      for (size_t i = 0; i < a.size(); ++i)
+        col.set(offset + static_cast<R_xlen_t>(i) * stride, a[i]);
+      return;
+    }
+    const R_xlen_t next = stride * static_cast<R_xlen_t>(dims[level]);
+    for (size_t i = 0; i < a.size(); ++i)
+      fill(*a[i].get_if<array_t>(), dims, level + 1,
+           offset + static_cast<R_xlen_t>(i) * stride, next, col);
   }
 
   // Finds or adds the column for a key. Records usually repeat the layout
@@ -293,12 +364,13 @@ bool parse(json& doc, const char* text) {
 }  // namespace
 
 extern "C" SEXP glazelite_from_json(SEXP txt, SEXP simplify_vector,
-                                    SEXP simplify_data_frame) {
+                                    SEXP simplify_data_frame, SEXP simplify_matrix) {
   return glazelite::guarded([&]() -> SEXP {
     if (TYPEOF(txt) != STRSXP || XLENGTH(txt) != 1 || STRING_ELT(txt, 0) == NA_STRING)
       throw std::runtime_error("txt must be one JSON string");
     converter convert(flag(simplify_vector, "simplifyVector"),
-                      flag(simplify_data_frame, "simplifyDataFrame"));
+                      flag(simplify_data_frame, "simplifyDataFrame"),
+                      flag(simplify_matrix, "simplifyMatrix"));
     json doc;
     if (!parse(doc, Rf_translateCharUTF8(STRING_ELT(txt, 0))))
       throw std::runtime_error("invalid JSON input");
@@ -310,12 +382,13 @@ extern "C" SEXP glazelite_from_json(SEXP txt, SEXP simplify_vector,
 // they were the elements of one JSON array. Blank lines are skipped. Returns
 // NULL when there is no record.
 extern "C" SEXP glazelite_from_ndjson(SEXP lines, SEXP simplify_vector,
-                                      SEXP simplify_data_frame) {
+                                      SEXP simplify_data_frame, SEXP simplify_matrix) {
   return glazelite::guarded([&]() -> SEXP {
     if (TYPEOF(lines) != STRSXP)
       throw std::runtime_error("lines must be a character vector");
     converter convert(flag(simplify_vector, "simplifyVector"),
-                      flag(simplify_data_frame, "simplifyDataFrame"));
+                      flag(simplify_data_frame, "simplifyDataFrame"),
+                      flag(simplify_matrix, "simplifyMatrix"));
     const R_xlen_t n = XLENGTH(lines);
     array_t records;
     records.reserve(static_cast<size_t>(n));
@@ -339,12 +412,13 @@ extern "C" SEXP glazelite_from_ndjson(SEXP lines, SEXP simplify_vector,
 }
 
 extern "C" SEXP glazelite_read_json(SEXP path, SEXP simplify_vector,
-                                    SEXP simplify_data_frame) {
+                                    SEXP simplify_data_frame, SEXP simplify_matrix) {
   return glazelite::guarded([&]() -> SEXP {
     if (TYPEOF(path) != STRSXP || XLENGTH(path) != 1 || STRING_ELT(path, 0) == NA_STRING)
       throw std::runtime_error("path must be one string");
     converter convert(flag(simplify_vector, "simplifyVector"),
-                      flag(simplify_data_frame, "simplifyDataFrame"));
+                      flag(simplify_data_frame, "simplifyDataFrame"),
+                      flag(simplify_matrix, "simplifyMatrix"));
     const char* name = Rf_translateChar(STRING_ELT(path, 0));
     std::ifstream file(name, std::ios::binary);
     if (!file) throw std::runtime_error("cannot open JSON file");
@@ -376,5 +450,72 @@ extern "C" SEXP glazelite_read_json(SEXP path, SEXP simplify_vector,
         throw std::runtime_error("invalid JSON file: no document found");
     }
     return convert.value(doc);
+  });
+}
+
+namespace {
+
+struct pretty_opts : glz::opts {
+  uint8_t indentation_width = 1;
+};
+
+const char* json_text(SEXP txt) {
+  if (TYPEOF(txt) != STRSXP || XLENGTH(txt) != 1 || STRING_ELT(txt, 0) == NA_STRING)
+    throw std::runtime_error("txt must be one JSON string");
+  return Rf_translateCharUTF8(STRING_ELT(txt, 0));
+}
+
+bool valid(const char* text) {
+  json doc;
+  return parse(doc, text);
+}
+
+SEXP json_string(const std::string& s) {
+  if (s.size() > static_cast<size_t>(INT_MAX))
+    throw std::runtime_error("JSON exceeds R's string-size limit");
+  return Rf_ScalarString(Rf_mkCharLenCE(s.data(), static_cast<int>(s.size()), CE_UTF8));
+}
+
+}  // namespace
+
+extern "C" SEXP glazelite_validate(SEXP txt) {
+  return glazelite::guarded([&]() -> SEXP {
+    return Rf_ScalarLogical(valid(json_text(txt)));
+  });
+}
+
+extern "C" SEXP glazelite_minify(SEXP txt) {
+  return glazelite::guarded([&]() -> SEXP {
+    const char* text = json_text(txt);
+    if (!valid(text)) throw std::runtime_error("invalid JSON input");
+    std::string in(text);
+    return json_string(glz::minify_json(in));
+  });
+}
+
+extern "C" SEXP glazelite_prettify(SEXP txt, SEXP indent) {
+  return glazelite::guarded([&]() -> SEXP {
+    const char* text = json_text(txt);
+    if (TYPEOF(indent) != INTSXP || XLENGTH(indent) != 1 || INTEGER(indent)[0] < 0 ||
+        INTEGER(indent)[0] > 64)
+      throw std::runtime_error("indent must be a number between 0 and 64");
+    if (!valid(text)) throw std::runtime_error("invalid JSON input");
+    const size_t width = static_cast<size_t>(INTEGER(indent)[0]);
+    // Glaze fixes the indentation width at compile time. Indent by one space
+    // per level and widen that here. Line breaks only occur between tokens,
+    // because JSON strings cannot contain a raw newline.
+    const std::string narrow = glz::prettify_json<pretty_opts{}>(std::string(text));
+    std::string out;
+    out.reserve(narrow.size() * 2);
+    bool line_start = true;
+    for (char c : narrow) {
+      if (line_start && c == ' ') {
+        out.append(width, ' ');
+        continue;
+      }
+      line_start = c == '\n';
+      out.push_back(c);
+    }
+    return json_string(out);
   });
 }

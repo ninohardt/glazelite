@@ -17,6 +17,8 @@ subset of the 'jsonlite' interface:
 incremental, so a document may be larger than a single R string.
 \item \code{\link[jsonlite:stream_in]{jsonlite::stream_out()}} and \code{\link[jsonlite:stream_in]{jsonlite::stream_in()}} write and read newline-delimited JSON
 (NDJSON) in batches.
+\item \code{\link[jsonlite:prettify]{jsonlite::prettify()}}, \code{\link[jsonlite:prettify]{jsonlite::minify()}} and \code{\link[jsonlite:validate]{jsonlite::validate()}} reformat and check JSON text,
+and \code{\link[jsonlite:unbox]{jsonlite::unbox()}} marks single values that are written as scalars.
 }
 }
 \section{Credits}{
@@ -30,6 +32,7 @@ installed package for details.
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://ninohardt.github.io/glazelite/}
   \item \url{https://github.com/ninohardt/glazelite}
   \item Report bugs at \url{https://github.com/ninohardt/glazelite/issues}
 }

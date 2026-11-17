@@ -4,41 +4,15 @@
 \alias{write_json}
 \title{Write JSON directly to a file}
 \usage{
-write_json(
-  x,
-  path,
-  dataframe = c("rows", "columns", "values"),
-  auto_unbox = FALSE,
-  na = c("null", "string"),
-  factor = c("string", "integer"),
-  always_decimal = FALSE,
-  pretty = FALSE,
-  digits = NA
-)
+write_json(x, path, ...)
 }
 \arguments{
-\item{x}{An atomic vector, array, list, or data frame. Array dimensions are
-written in their existing order, including dimensions of length one or zero.}
+\item{x}{An R object, as for \code{\link[jsonlite:fromJSON]{jsonlite::toJSON()}}.}
 
 \item{path}{Destination file path.}
 
-\item{dataframe}{Data frame layout: rows, columns, or values.}
-
-\item{auto_unbox}{Whether length-one atomic vectors become scalars.}
-
-\item{na}{Encode missing and non-finite values as JSON null or as strings.}
-
-\item{factor}{Encode factors as level labels (\code{"string"}, the default) or
-integer level indices (\code{"integer"}).}
-
-\item{always_decimal}{Distinguish doubles from integers by retaining a decimal
-point or exponent in finite double output.}
-
-\item{pretty}{Whether to indent JSON with two spaces per level. Pretty file
-output ends with a newline.}
-
-\item{digits}{Must be \code{NA}. Numbers retain full round-trip precision;
-rounding to a specified number of digits is not implemented.}
+\item{...}{Options passed on to \code{\link[jsonlite:fromJSON]{jsonlite::toJSON()}}, such as \code{auto_unbox},
+\code{dataframe}, \code{digits} or \code{pretty}.}
 }
 \value{
 The path, invisibly.
@@ -57,7 +31,7 @@ The document is first written to a temporary file in the directory of
 path <- tempfile(fileext = ".json")
 write_json(data.frame(id = 1:3, name = c("A", "B", "C")), path)
 readLines(path, warn = FALSE)
-read_json(path)
+read_json(path, simplifyVector = TRUE)
 unlink(path)
 }
 \seealso{

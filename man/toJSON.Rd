@@ -7,35 +7,63 @@
 toJSON(
   x,
   dataframe = c("rows", "columns", "values"),
-  auto_unbox = FALSE,
-  na = c("null", "string"),
+  Date = c("ISO8601", "epoch"),
+  POSIXt = c("string", "ISO8601", "epoch", "mongo"),
   factor = c("string", "integer"),
-  always_decimal = FALSE,
+  null = c("list", "null"),
+  na = c("null", "string"),
+  auto_unbox = FALSE,
+  digits = NA,
   pretty = FALSE,
-  digits = NA
+  always_decimal = FALSE,
+  UTC = FALSE,
+  rownames = NULL
 )
 }
 \arguments{
 \item{x}{An atomic vector, array, list, or data frame. Array dimensions are
-written in their existing order, including dimensions of length one or zero.}
+written in their existing order, including dimensions of length one or
+zero. Data frames may contain matrix, list, and data-frame columns.}
 
 \item{dataframe}{Data frame layout: rows, columns, or values.}
 
-\item{auto_unbox}{Whether length-one atomic vectors become scalars.}
+\item{Date}{Encode \code{Date} objects as ISO 8601 strings such as
+\code{"2026-01-31"} (\code{"ISO8601"}, the default) or as the number of days since
+1970-01-01 (\code{"epoch"}).}
 
-\item{na}{Encode missing and non-finite values as JSON null or as strings.}
+\item{POSIXt}{Encode date-times as strings in the format R prints them
+(\code{"string"}, the default), as ISO 8601 strings (\code{"ISO8601"}), as
+milliseconds since 1970-01-01 UTC (\code{"epoch"}), or as MongoDB-style
+objects such as \code{{"$date": 1767323045000}} (\code{"mongo"}).}
 
 \item{factor}{Encode factors as level labels (\code{"string"}, the default) or
 integer level indices (\code{"integer"}).}
 
+\item{null}{Encode \code{NULL} as an empty object, \code{{}} (\code{"list"}, the
+default), or as JSON \code{null} (\code{"null"}).}
+
+\item{na}{Encode missing and non-finite values as JSON null or as strings.}
+
+\item{auto_unbox}{Whether length-one atomic vectors become scalars. Use
+\code{\link[jsonlite:unbox]{jsonlite::unbox()}} to mark individual values instead.}
+
+\item{digits}{\code{NA} (the default) writes every number as the shortest text
+that reads back to the same value. A number gives the maximum number of
+decimal digits, and a number wrapped in \code{\link[=I]{I()}} the number of significant
+digits; both round as jsonlite does.}
+
+\item{pretty}{Whether to indent the output: \code{TRUE} for two spaces per
+level, or the number of spaces. Pretty file output ends with a newline.}
+
 \item{always_decimal}{Distinguish doubles from integers by retaining a decimal
 point or exponent in finite double output.}
 
-\item{pretty}{Whether to indent JSON with two spaces per level. Pretty file
-output ends with a newline.}
+\item{UTC}{Whether date-times are converted to UTC. With
+\code{POSIXt = "ISO8601"} the strings then end in \code{Z}.}
 
-\item{digits}{Must be \code{NA}. Numbers retain full round-trip precision;
-rounding to a specified number of digits is not implemented.}
+\item{rownames}{Whether row names of data frames are written, as a \verb{_row}
+field. The default, \code{NULL}, writes character row names but not automatic
+ones.}
 }
 \value{
 A length-one character vector of class
@@ -46,14 +74,22 @@ A length-one character vector of class
 This function returns one R string, so it retains R's string-size limit.
 Use \code{\link[jsonlite:read_json]{jsonlite::write_json()}} for large output.
 }
+\details{
+The arguments and the structure of the output follow
+\code{jsonlite::toJSON()}. Two defaults differ: numbers keep full precision
+unless \code{digits} is set, and missing numbers are written as \code{null} unless
+\code{na = "string"}.
+}
 \examples{
 toJSON(c(1.5, NA, 3))
 toJSON(list(id = 1L, tags = c("a", "b")), auto_unbox = TRUE)
 toJSON(matrix(1:6, nrow = 2))
+toJSON(pi, digits = 3)
 
-df <- data.frame(id = 1:2, group = factor(c("a", "b")))
+df <- data.frame(id = 1:2, group = factor(c("a", "b")),
+                 day = as.Date(c("2026-01-31", NA)))
 toJSON(df)
-toJSON(df, dataframe = "columns", factor = "integer")
+toJSON(df, dataframe = "columns", factor = "integer", Date = "epoch")
 toJSON(df, pretty = TRUE)
 }
 \seealso{
