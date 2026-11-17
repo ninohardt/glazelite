@@ -3,6 +3,10 @@
 * First release prepared for CRAN.
 * All exported functions now document their return value and have runnable
   examples.
+* `toJSON()` returns an object of class `c("glazelite_json", "json")` that
+  prints as plain JSON text.
+* The package has a logo and a website at
+  <https://ninohardt.github.io/glazelite/>.
 * `stream_in()` opens a connection that is not yet open once, instead of
   re-reading its first page indefinitely, and rejects inputs that are neither a
   path nor a connection.

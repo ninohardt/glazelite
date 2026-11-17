@@ -38,7 +38,9 @@ output ends with a newline.}
 rounding to a specified number of digits is not implemented.}
 }
 \value{
-A length-one character vector of class \code{json}.
+A length-one character vector of class
+\code{c("glazelite_json", "json")}. It prints as plain JSON text; use
+\code{\link[=as.character]{as.character()}} to drop the class.
 }
 \description{
 This function returns one R string, so it retains R's string-size limit.
@@ -52,7 +54,7 @@ toJSON(matrix(1:6, nrow = 2))
 df <- data.frame(id = 1:2, group = factor(c("a", "b")))
 toJSON(df)
 toJSON(df, dataframe = "columns", factor = "integer")
-cat(toJSON(df, pretty = TRUE), "\n")
+toJSON(df, pretty = TRUE)
 }
 \seealso{
 \code{\link[jsonlite:fromJSON]{jsonlite::fromJSON()}} for the reverse conversion, \code{\link[jsonlite:read_json]{jsonlite::write_json()}} to write

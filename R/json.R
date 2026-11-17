@@ -15,7 +15,9 @@
 #'   output ends with a newline.
 #' @param digits Must be `NA`. Numbers retain full round-trip precision;
 #'   rounding to a specified number of digits is not implemented.
-#' @return A length-one character vector of class `json`.
+#' @return A length-one character vector of class
+#'   `c("glazelite_json", "json")`. It prints as plain JSON text; use
+#'   [as.character()] to drop the class.
 #' @seealso [fromJSON()] for the reverse conversion, [write_json()] to write
 #'   to a file.
 #' @examples
@@ -26,7 +28,7 @@
 #' df <- data.frame(id = 1:2, group = factor(c("a", "b")))
 #' toJSON(df)
 #' toJSON(df, dataframe = "columns", factor = "integer")
-#' cat(toJSON(df, pretty = TRUE), "\n")
+#' toJSON(df, pretty = TRUE)
 #' @export
 toJSON <- function(x, dataframe = c("rows", "columns", "values"),
                    auto_unbox = FALSE, na = c("null", "string"),
@@ -37,7 +39,14 @@ toJSON <- function(x, dataframe = c("rows", "columns", "values"),
   factor <- match.arg(factor)
   .check_digits(digits)
   structure(.Call(glazelite_to_json, x, auto_unbox, dataframe, na,
-                  factor, always_decimal, pretty), class = "json")
+                  factor, always_decimal, pretty),
+            class = c("glazelite_json", "json"))
+}
+
+#' @export
+print.glazelite_json <- function(x, ...) {
+  cat(x, "\n", sep = "")
+  invisible(x)
 }
 
 #' Write JSON directly to a file

@@ -27,8 +27,16 @@ package under the MIT license. Glaze in turn includes code from the
 installed package for details.
 }
 
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/ninohardt/glazelite}
+  \item Report bugs at \url{https://github.com/ninohardt/glazelite/issues}
+}
+
+}
 \author{
-\strong{Maintainer}: Nino Hardt \email{I@ninohardt.com} [copyright holder]
+\strong{Maintainer}: Nino Hardt \email{me@ninohardt.com} (\href{https://orcid.org/0000-0001-5215-6216}{ORCID}) [copyright holder]
 
 Other contributors:
 \itemize{

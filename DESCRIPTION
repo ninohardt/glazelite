@@ -30,7 +30,8 @@ License: MIT + file LICENSE
 Copyright: See the file 'inst/COPYRIGHTS' for the copyright holders and
     licenses of the bundled 'Glaze' headers and the third-party code they
     contain.
-URL: https://github.com/ninohardt/glazelite
+URL: https://ninohardt.github.io/glazelite/,
+    https://github.com/ninohardt/glazelite
 BugReports: https://github.com/ninohardt/glazelite/issues
 Encoding: UTF-8
 Depends: R (>= 4.3.0)

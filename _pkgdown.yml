@@ -1,0 +1,47 @@
+url: https://ninohardt.github.io/glazelite/
+
+template:
+  bootstrap: 5
+  light-switch: true
+  bslib:
+    primary: "#C2255C"
+
+home:
+  title: "glazelite: fast JSON reading and writing for R"
+  description: >
+    Read and write JSON in R with the Glaze C++ library: a fast subset of the
+    jsonlite interface that can also stream large documents to disk.
+  links:
+    - text: Glaze C++ library
+      href: https://github.com/stephenberry/glaze
+
+authors:
+  Nino Hardt:
+    href: https://github.com/ninohardt
+  Stephen Berry:
+    href: https://github.com/stephenberry
+
+navbar:
+  structure:
+    left: [reference, news]
+    right: [search, github, lightswitch]
+
+reference:
+  - title: Convert in memory
+    desc: Between R objects and JSON text.
+    contents:
+      - toJSON
+      - fromJSON
+  - title: Read and write files
+    desc: Whole JSON documents on disk, written incrementally.
+    contents:
+      - write_json
+      - read_json
+  - title: Stream newline-delimited JSON
+    desc: One record per line, in batches.
+    contents:
+      - stream_out
+      - stream_in
+  - title: Package
+    contents:
+      - glazelite-package

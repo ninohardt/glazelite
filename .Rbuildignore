@@ -11,3 +11,6 @@
 ^tools$
 ^revdep$
 ^\.gitattributes$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

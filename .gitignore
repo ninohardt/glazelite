@@ -9,3 +9,4 @@ src/*.d
 .RData
 .Ruserdata
 .claude/
+docs/

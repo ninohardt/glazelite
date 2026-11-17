@@ -6,11 +6,12 @@ This is a new submission.
 
 * Windows 10 x64, R 4.5.2, Rtools45 (GCC 14.2.0)
 * Windows 10 x64, R 4.6.2, Rtools45 (GCC 14.2.0)
+* win-builder, Windows Server 2022 x64, R-devel (2026-11-16 r90914),
+  GCC 14.3.0
 
 <!-- Before submitting, add the results of the other platforms here:
-     win-builder (R-devel, R-release), macOS builder
-     (https://mac.r-project.org/macbuilder/submit.html) and a Linux check
-     (R-hub or a local `R CMD check --as-cran`). -->
+     a macOS check (https://mac.r-project.org/macbuilder/submit.html) and a
+     Linux check (R-hub, GitHub Actions or a local `R CMD check --as-cran`). -->
 
 ## R CMD check results
 
