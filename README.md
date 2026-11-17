@@ -8,7 +8,8 @@ glazelite offers the familiar `toJSON()` / `fromJSON()` interface of
 with the encoding and parsing done by Glaze, a header-only C++23 library by
 Stephen Berry.
 
-* **Familiar.** The same function names, arguments and output as jsonlite
+* **Familiar.** The function names and arguments of jsonlite, and the same
+  JSON structure for vectors, arrays and data frames
   (see [A substitute for jsonlite](#a-substitute-for-jsonlite)).
 * **Fast.** Typically 5 to 10 times faster than jsonlite for vectors and data
   frames, and far more for nested lists (see [Performance](#performance)).
@@ -148,11 +149,23 @@ particularly for reading.
 
 ## A substitute for jsonlite
 
-glazelite keeps jsonlite's function names, argument names and output. For the
-common cases, replacing `library(jsonlite)` with `library(glazelite)` is all
-that is needed, and the JSON that is written stays the same. The package's
-tests compare its output with jsonlite's for vectors, arrays of every shape
-and all data frame layouts.
+glazelite uses jsonlite's function names and, for the options it implements,
+the same argument names, so common code keeps working when `library(jsonlite)`
+is replaced with `library(glazelite)`. For vectors, arrays of every shape and
+all data frame layouts the JSON has the same structure as jsonlite's: the
+same nesting, element order and field layout. The package's tests check this
+against jsonlite.
+
+Three defaults differ on purpose:
+
+* Numbers keep full precision: every double is written as the shortest text
+  that reads back to the same value. jsonlite rounds to four decimal digits by
+  default and to 15 significant digits with `digits = NA`, so `toJSON(pi)` is
+  `[3.1416]` there and `[3.141592653589793]` here.
+* Missing and non-finite numbers are written as `null`. jsonlite writes the
+  strings `"NA"`, `"NaN"` and `"Inf"`; `na = "string"` does the same here.
+* `read_json()` simplifies to vectors and data frames, as `fromJSON()` does.
+  jsonlite's `read_json()` returns nested lists unless `simplifyVector = TRUE`.
 
 yyjsonr, the fastest JSON package for R, makes a different trade-off: it has
 its own interface (`write_json_str()`, `read_json_str()`, options objects),
@@ -176,14 +189,19 @@ glazelite does not cover all of jsonlite yet. The differences that remain:
 * Supported inputs are logical, integer, double, character, and factor
   vectors; arrays of any dimension; lists; and data frames of those types,
   including matrix, list, and data-frame columns. Other classes, such as
-  dates and date-times, and complex and raw vectors raise an error instead of
-  being converted; jsonlite and yyjsonr write dates as strings.
+  dates, date-times and `jsonlite::unbox()` values, and complex and raw
+  vectors raise an error instead of being converted; jsonlite and yyjsonr
+  write dates as strings.
+* `NULL` is written as `null` (jsonlite writes `{}`), row names of data frames
+  are not written (jsonlite adds a `_row` field for non-default row names),
+  and lists in which only some elements are named raise an error.
+* Exponents are written as `1E20` rather than `1e+20`. Both are valid JSON
+  for the same number.
 * The `dataframe`, `auto_unbox`, `na`, `factor`, `always_decimal`, and
   `pretty` options are implemented. `digits` must be `NA`: numbers always
   keep full precision, and rounding is not implemented.
-* Missing values are written as `null` by default (`na = "string"` writes
-  `"NA"`). In the row layout of a data frame, missing fields are omitted, as
-  in jsonlite.
+* In the row layout of a data frame, missing fields are omitted, as in
+  jsonlite.
 * Arrays keep their dimension order and dimensions of length one or zero. As
   with jsonlite, `auto_unbox = TRUE` keeps dimensioned length-one vectors and
   values wrapped in `I()` as JSON arrays.
@@ -196,7 +214,10 @@ glazelite does not cover all of jsonlite yet. The differences that remain:
 * Arrays of scalars of one type become atomic vectors, and arrays of records
   with scalar fields become data frames.
 * There is no matrix simplification: `[[1,2],[3,4]]` becomes a list of two
-  vectors, where jsonlite and yyjsonr return a matrix.
+  vectors, where jsonlite and yyjsonr return a matrix. The `simplifyMatrix`
+  and `flatten` arguments are not available.
+* `stream_in()` and `stream_out()` name their file argument `path`, where
+  jsonlite uses `con`.
 * Arrays of mixed types stay lists instead of being coerced to character, and
   records with nested fields stay lists of records.
 
