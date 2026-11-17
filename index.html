@@ -70,7 +70,7 @@
 <p>glazelite offers the familiar <code><a href="reference/toJSON.html">toJSON()</a></code> / <code><a href="reference/fromJSON.html">fromJSON()</a></code> interface of <a href="https://CRAN.R-project.org/package=jsonlite" class="external-link">jsonlite</a> for the common cases, with the encoding and parsing done by Glaze, a header-only C++23 library by Stephen Berry.</p>
 <ul>
 <li>
-<strong>Familiar.</strong> The same function names, arguments and output as jsonlite (see <a href="#a-substitute-for-jsonlite">A substitute for jsonlite</a>).</li>
+<strong>Familiar.</strong> The function names and arguments of jsonlite, and the same JSON structure for vectors, arrays and data frames (see <a href="#a-substitute-for-jsonlite">A substitute for jsonlite</a>).</li>
 <li>
 <strong>Fast.</strong> Typically 5 to 10 times faster than jsonlite for vectors and data frames, and far more for nested lists (see <a href="#performance">Performance</a>).</li>
 <li>
@@ -238,7 +238,14 @@
 <div class="section level2">
 <h2 id="a-substitute-for-jsonlite">A substitute for jsonlite<a class="anchor" aria-label="anchor" href="#a-substitute-for-jsonlite"></a>
 </h2>
-<p>glazelite keeps jsonlite’s function names, argument names and output. For the common cases, replacing <code><a href="https://jeroen.r-universe.dev/jsonlite" class="external-link">library(jsonlite)</a></code> with <code><a href="https://ninohardt.github.io/glazelite/">library(glazelite)</a></code> is all that is needed, and the JSON that is written stays the same. The package’s tests compare its output with jsonlite’s for vectors, arrays of every shape and all data frame layouts.</p>
+<p>glazelite uses jsonlite’s function names and, for the options it implements, the same argument names, so common code keeps working when <code><a href="https://jeroen.r-universe.dev/jsonlite" class="external-link">library(jsonlite)</a></code> is replaced with <code><a href="https://ninohardt.github.io/glazelite/">library(glazelite)</a></code>. For vectors, arrays of every shape and all data frame layouts the JSON has the same structure as jsonlite’s: the same nesting, element order and field layout. The package’s tests check this against jsonlite.</p>
+<p>Three defaults differ on purpose:</p>
+<ul>
+<li>Numbers keep full precision: every double is written as the shortest text that reads back to the same value. jsonlite rounds to four decimal digits by default and to 15 significant digits with <code>digits = NA</code>, so <code>toJSON(pi)</code> is <code>[3.1416]</code> there and <code>[3.141592653589793]</code> here.</li>
+<li>Missing and non-finite numbers are written as <code>null</code>. jsonlite writes the strings <code>"NA"</code>, <code>"NaN"</code> and <code>"Inf"</code>; <code>na = "string"</code> does the same here.</li>
+<li>
+<code><a href="reference/read_json.html">read_json()</a></code> simplifies to vectors and data frames, as <code><a href="reference/fromJSON.html">fromJSON()</a></code> does. jsonlite’s <code><a href="reference/read_json.html">read_json()</a></code> returns nested lists unless <code>simplifyVector = TRUE</code>.</li>
+</ul>
 <p>yyjsonr, the fastest JSON package for R, makes a different trade-off: it has its own interface (<code>write_json_str()</code>, <code>read_json_str()</code>, options objects), and what it writes differs from jsonlite in places. With default options (jsonlite with <code>digits = NA</code>, yyjsonr 0.1.22):</p>
 <table class="table">
 <colgroup>
@@ -293,16 +300,21 @@
 <p>glazelite does not cover all of jsonlite yet. The differences that remain:</p>
 <p><strong>Writing</strong></p>
 <ul>
-<li>Supported inputs are logical, integer, double, character, and factor vectors; arrays of any dimension; lists; and data frames of those types, including matrix, list, and data-frame columns. Other classes, such as dates and date-times, and complex and raw vectors raise an error instead of being converted; jsonlite and yyjsonr write dates as strings.</li>
+<li>Supported inputs are logical, integer, double, character, and factor vectors; arrays of any dimension; lists; and data frames of those types, including matrix, list, and data-frame columns. Other classes, such as dates, date-times and <code><a href="https://rdrr.io/pkg/jsonlite/man/unbox.html" class="external-link">jsonlite::unbox()</a></code> values, and complex and raw vectors raise an error instead of being converted; jsonlite and yyjsonr write dates as strings.</li>
+<li>
+<code>NULL</code> is written as <code>null</code> (jsonlite writes <code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{}</a></code>), row names of data frames are not written (jsonlite adds a <code>_row</code> field for non-default row names), and lists in which only some elements are named raise an error.</li>
+<li>Exponents are written as <code>1E20</code> rather than <code>1e+20</code>. Both are valid JSON for the same number.</li>
 <li>The <code>dataframe</code>, <code>auto_unbox</code>, <code>na</code>, <code>factor</code>, <code>always_decimal</code>, and <code>pretty</code> options are implemented. <code>digits</code> must be <code>NA</code>: numbers always keep full precision, and rounding is not implemented.</li>
-<li>Missing values are written as <code>null</code> by default (<code>na = "string"</code> writes <code>"NA"</code>). In the row layout of a data frame, missing fields are omitted, as in jsonlite.</li>
+<li>In the row layout of a data frame, missing fields are omitted, as in jsonlite.</li>
 <li>Arrays keep their dimension order and dimensions of length one or zero. As with jsonlite, <code>auto_unbox = TRUE</code> keeps dimensioned length-one vectors and values wrapped in <code><a href="https://rdrr.io/r/base/AsIs.html" class="external-link">I()</a></code> as JSON arrays.</li>
 <li>Factors are written as labels; <code>factor = "integer"</code> writes their level indices. <code>always_decimal = TRUE</code> keeps a decimal point or exponent for doubles, while integers and factor codes stay integers.</li>
 </ul>
 <p><strong>Reading</strong></p>
 <ul>
 <li>Arrays of scalars of one type become atomic vectors, and arrays of records with scalar fields become data frames.</li>
-<li>There is no matrix simplification: <code>[[1,2],[3,4]]</code> becomes a list of two vectors, where jsonlite and yyjsonr return a matrix.</li>
+<li>There is no matrix simplification: <code>[[1,2],[3,4]]</code> becomes a list of two vectors, where jsonlite and yyjsonr return a matrix. The <code>simplifyMatrix</code> and <code>flatten</code> arguments are not available.</li>
+<li>
+<code><a href="reference/stream_in.html">stream_in()</a></code> and <code><a href="reference/stream_out.html">stream_out()</a></code> name their file argument <code>path</code>, where jsonlite uses <code>con</code>.</li>
 <li>Arrays of mixed types stay lists instead of being coerced to character, and records with nested fields stay lists of records.</li>
 </ul>
 </div>
@@ -337,9 +349,8 @@
 <div class="license">
 <h2 data-toc-skip>License</h2>
 <ul class="list-unstyled">
-<li>
-<a href="https://opensource.org/licenses/mit-license.php" class="external-link">MIT</a> + file <a href="LICENSE-text.html">LICENSE</a>
-</li>
+<li><a href="LICENSE.html">Full license</a></li>
+<li><small><a href="https://opensource.org/licenses/mit-license.php" class="external-link">MIT</a> + file <a href="LICENSE-text.html">LICENSE</a></small></li>
 </ul>
 </div>
 
