@@ -1,0 +1,13 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.git$
+^\.gitignore$
+^\.github$
+^\.claude$
+^.*\.tar\.gz$
+^.*\.Rcheck$
+^cran-comments\.md$
+^CRAN-SUBMISSION$
+^tools$
+^revdep$
+^\.gitattributes$

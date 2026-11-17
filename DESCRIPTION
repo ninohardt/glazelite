@@ -1,0 +1,41 @@
+Package: glazelite
+Type: Package
+Title: Fast 'JSON' Reading and Writing with the 'Glaze' C++ Library
+Version: 0.1.2
+Authors@R: c(
+    person("Nino", "Hardt", role = c("aut", "cre", "cph"),
+           email = "me@ninohardt.com",
+           comment = c(ORCID = "0000-0001-5215-6216")),
+    person("Stephen", "Berry", role = c("ctb", "cph"),
+           comment = "Author of the bundled 'Glaze' library"),
+    person("Daniel", "Lemire", role = c("ctb", "cph"),
+           comment = "Author of 'fast_float', bundled with 'Glaze'"),
+    person("João Paulo", "Magalhaes", role = c("ctb", "cph"),
+           comment = "Author of 'fast_float', bundled with 'Glaze'"),
+    person("The fast_float authors", role = "cph",
+           comment = "'fast_float', bundled with 'Glaze'"),
+    person("Victor", "Zverovich", role = c("ctb", "cph"),
+           comment = "Author of 'zmij', ported in the bundled 'Glaze' headers"),
+    person("Daniel", "Kirchner", role = c("ctb", "cph"),
+           comment = "Author of the 'xxh64' implementation bundled with 'Glaze'")
+    )
+Description: Reads and writes 'JSON' with the header-only C++ library 'Glaze'
+    <https://github.com/stephenberry/glaze>. Provides a subset of the
+    'jsonlite' interface: toJSON() and fromJSON() convert between R objects
+    and 'JSON' text, write_json() and read_json() work on files, and
+    stream_out() and stream_in() handle newline-delimited 'JSON'. Arrays and
+    data frames are written to files incrementally, so that a document can be
+    larger than a single R string.
+License: MIT + file LICENSE
+Copyright: See the file 'inst/COPYRIGHTS' for the copyright holders and
+    licenses of the bundled 'Glaze' headers and the third-party code they
+    contain.
+URL: https://github.com/ninohardt/glazelite
+BugReports: https://github.com/ninohardt/glazelite/issues
+Encoding: UTF-8
+Depends: R (>= 4.3.0)
+Suggests: jsonlite
+SystemRequirements: C++23
+NeedsCompilation: yes
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
