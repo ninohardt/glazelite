@@ -68,8 +68,24 @@ toJSON(array(1:8, c(2, 2, 2)))
 #> [[[1,5],[3,7]],[[2,6],[4,8]]]
 ```
 
-Arrays of records come back as data frames, and arrays of scalars as
-vectors:
+Dates and date-times are written as strings, and
+[`unbox()`](https://ninohardt.github.io/glazelite/reference/unbox.md)
+marks single values that should not become arrays:
+
+``` r
+
+toJSON(data.frame(day = as.Date("2026-01-31"), n = 3L))
+#> [{"day":"2026-01-31","n":3}]
+
+toJSON(list(id = unbox(7L), tags = "a"))
+#> {"id":7,"tags":["a"]}
+
+toJSON(pi, digits = 3)
+#> [3.142]
+```
+
+Arrays of records come back as data frames, arrays of scalars as
+vectors, and arrays of arrays as matrices:
 
 ``` r
 
@@ -77,6 +93,11 @@ fromJSON('[{"id":1,"name":"Ada","score":9.5},{"id":2,"name":"Grace"}]')
 #>   id  name score
 #> 1  1   Ada   9.5
 #> 2  2 Grace    NA
+
+fromJSON("[[1, 2, 3], [4, 5, 6]]")
+#>      [,1] [,2] [,3]
+#> [1,]    1    2    3
+#> [2,]    4    5    6
 
 str(fromJSON('{"id": 1, "tags": ["a", "b"], "nested": {"ok": true, "x": [1.5, null]}}'))
 #> List of 3
@@ -93,7 +114,7 @@ str(fromJSON('{"id": 1, "tags": ["a", "b"], "nested": {"ok": true, "x": [1.5, nu
 
 path <- tempfile(fileext = ".json")
 write_json(df, path)
-read_json(path)
+read_json(path, simplifyVector = TRUE)
 #>   id  name score
 #> 1  1   Ada   9.5
 #> 2  2 Grace    NA
@@ -171,31 +192,39 @@ particularly for reading.
 
 ## A substitute for jsonlite
 
-glazelite uses jsonlite’s function names and, for the options it
-implements, the same argument names, so common code keeps working when
+glazelite uses jsonlite’s function names and argument names, so common
+code keeps working when
 [`library(jsonlite)`](https://jeroen.r-universe.dev/jsonlite) is
 replaced with
-[`library(glazelite)`](https://ninohardt.github.io/glazelite/). For
-vectors, arrays of every shape and all data frame layouts the JSON has
-the same structure as jsonlite’s: the same nesting, element order and
-field layout. The package’s tests check this against jsonlite.
+[`library(glazelite)`](https://ninohardt.github.io/glazelite/). That
+covers
+[`toJSON()`](https://ninohardt.github.io/glazelite/reference/toJSON.md),
+[`fromJSON()`](https://ninohardt.github.io/glazelite/reference/fromJSON.md),
+[`write_json()`](https://ninohardt.github.io/glazelite/reference/write_json.md),
+[`read_json()`](https://ninohardt.github.io/glazelite/reference/read_json.md),
+[`stream_in()`](https://ninohardt.github.io/glazelite/reference/stream_in.md),
+[`stream_out()`](https://ninohardt.github.io/glazelite/reference/stream_out.md),
+[`unbox()`](https://ninohardt.github.io/glazelite/reference/unbox.md),
+[`prettify()`](https://ninohardt.github.io/glazelite/reference/prettify.md),
+[`minify()`](https://ninohardt.github.io/glazelite/reference/prettify.md)
+and
+[`validate()`](https://ninohardt.github.io/glazelite/reference/prettify.md).
 
-Three defaults differ on purpose:
+The JSON has the same structure as jsonlite’s for vectors, arrays of
+every shape, lists, dates and date-times, and all data frame layouts
+including row names. With `digits` set, numbers are rounded and written
+exactly as jsonlite writes them. The package’s tests check all of this
+against jsonlite.
+
+Two defaults differ on purpose:
 
 - Numbers keep full precision: every double is written as the shortest
   text that reads back to the same value. jsonlite rounds to four
-  decimal digits by default and to 15 significant digits with
-  `digits = NA`, so `toJSON(pi)` is `[3.1416]` there and
-  `[3.141592653589793]` here.
+  decimal digits by default, so `toJSON(pi)` is `[3.1416]` there and
+  `[3.141592653589793]` here. Use `digits = 4` for jsonlite’s output.
 - Missing and non-finite numbers are written as `null`. jsonlite writes
   the strings `"NA"`, `"NaN"` and `"Inf"`; `na = "string"` does the same
   here.
-- [`read_json()`](https://ninohardt.github.io/glazelite/reference/read_json.md)
-  simplifies to vectors and data frames, as
-  [`fromJSON()`](https://ninohardt.github.io/glazelite/reference/fromJSON.md)
-  does. jsonlite’s
-  [`read_json()`](https://ninohardt.github.io/glazelite/reference/read_json.md)
-  returns nested lists unless `simplifyVector = TRUE`.
 
 yyjsonr, the fastest JSON package for R, makes a different trade-off: it
 has its own interface (`write_json_str()`, `read_json_str()`, options
@@ -212,51 +241,22 @@ default options (jsonlite with `digits = NA`, yyjsonr 0.1.22):
 | data frame with a 2 x 2 matrix column `m` | `[{"id":1,"m":[1,3]},{"id":2,"m":[2,4]}]` | `[{"id":1,"m":1},{"id":2,"m":2}]` |
 | `data.frame(id = 1:2, v = c(NA, 2.5))` | `[{"id":1},{"id":2,"v":2.5}]` | `[{"id":1,"v":null},{"id":2,"v":2.5}]` |
 
-glazelite does not cover all of jsonlite yet. The differences that
-remain:
+glazelite does not cover all of jsonlite. What is missing or different:
 
-**Writing**
-
-- Supported inputs are logical, integer, double, character, and factor
-  vectors; arrays of any dimension; lists; and data frames of those
-  types, including matrix, list, and data-frame columns. Other classes,
-  such as dates, date-times and
-  [`jsonlite::unbox()`](https://rdrr.io/pkg/jsonlite/man/unbox.html)
-  values, and complex and raw vectors raise an error instead of being
-  converted; jsonlite and yyjsonr write dates as strings.
-- `NULL` is written as `null` (jsonlite writes
-  [`{}`](https://rdrr.io/r/base/Paren.html)), row names of data frames
-  are not written (jsonlite adds a `_row` field for non-default row
-  names), and lists in which only some elements are named raise an
-  error.
-- Exponents are written as `1E20` rather than `1e+20`. Both are valid
-  JSON for the same number.
-- The `dataframe`, `auto_unbox`, `na`, `factor`, `always_decimal`, and
-  `pretty` options are implemented. `digits` must be `NA`: numbers
-  always keep full precision, and rounding is not implemented.
-- In the row layout of a data frame, missing fields are omitted, as in
-  jsonlite.
-- Arrays keep their dimension order and dimensions of length one or
-  zero. As with jsonlite, `auto_unbox = TRUE` keeps dimensioned
-  length-one vectors and values wrapped in
-  [`I()`](https://rdrr.io/r/base/AsIs.html) as JSON arrays.
-- Factors are written as labels; `factor = "integer"` writes their level
-  indices. `always_decimal = TRUE` keeps a decimal point or exponent for
-  doubles, while integers and factor codes stay integers.
-
-**Reading**
-
-- Arrays of scalars of one type become atomic vectors, and arrays of
-  records with scalar fields become data frames.
-- There is no matrix simplification: `[[1,2],[3,4]]` becomes a list of
-  two vectors, where jsonlite and yyjsonr return a matrix. The
-  `simplifyMatrix` and `flatten` arguments are not available.
-- [`stream_in()`](https://ninohardt.github.io/glazelite/reference/stream_in.md)
-  and
-  [`stream_out()`](https://ninohardt.github.io/glazelite/reference/stream_out.md)
-  name their file argument `path`, where jsonlite uses `con`.
-- Arrays of mixed types stay lists instead of being coerced to
-  character, and records with nested fields stay lists of records.
+- Complex and raw vectors, and objects of classes other than factors,
+  dates and date-times, raise an error instead of being converted.
+- With the default `digits = NA`, exponents are written as `1E20` rather
+  than `1e+20`. Both are valid JSON for the same number.
+- Duplicated names in a list are written as they are; jsonlite makes
+  them unique.
+- When reading, arrays of mixed types stay lists instead of being
+  coerced to character, and arrays of records whose fields hold arrays
+  or objects stay lists of records, where jsonlite returns a data frame
+  with list columns. The `flatten` argument is not available.
+- [`fromJSON()`](https://ninohardt.github.io/glazelite/reference/fromJSON.md)
+  reads a JSON string or a file path, but not a URL.
+- `serializeJSON()`, `rbind_pages()` and the base64 helpers are not
+  provided.
 
 ## Large files
 

@@ -10,17 +10,19 @@ with a `handler`, each page is simplified on its own.
 
 ``` r
 stream_in(
-  path,
+  con,
   handler = NULL,
   pagesize = 500L,
+  verbose = FALSE,
   simplifyVector = TRUE,
-  simplifyDataFrame = TRUE
+  simplifyDataFrame = simplifyVector,
+  simplifyMatrix = simplifyVector
 )
 ```
 
 ## Arguments
 
-- path:
+- con:
 
   An input path or an R connection. A connection that is not yet open is
   opened for reading and closed again on exit.
@@ -34,6 +36,10 @@ stream_in(
 
   Number of lines read per page when a `handler` is given.
 
+- verbose:
+
+  Accepted for compatibility with jsonlite and ignored.
+
 - simplifyVector:
 
   Simplify arrays of scalar values to atomic vectors.
@@ -42,6 +48,11 @@ stream_in(
 
   Simplify arrays of records to data frames. Has no effect unless
   `simplifyVector` is also `TRUE`.
+
+- simplifyMatrix:
+
+  Simplify regular arrays of arrays to matrices and higher-dimensional
+  arrays. Has no effect unless `simplifyVector` is also `TRUE`.
 
 ## Value
 

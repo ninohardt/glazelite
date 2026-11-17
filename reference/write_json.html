@@ -50,17 +50,7 @@ input R object must still fit in R memory. For generated batches, use
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">write_json</span><span class="op">(</span></span>
-<span>  <span class="va">x</span>,</span>
-<span>  <span class="va">path</span>,</span>
-<span>  dataframe <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rows"</span>, <span class="st">"columns"</span>, <span class="st">"values"</span><span class="op">)</span>,</span>
-<span>  auto_unbox <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  na <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"null"</span>, <span class="st">"string"</span><span class="op">)</span>,</span>
-<span>  factor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"string"</span>, <span class="st">"integer"</span><span class="op">)</span>,</span>
-<span>  always_decimal <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  pretty <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  digits <span class="op">=</span> <span class="cn">NA</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">write_json</span><span class="op">(</span><span class="va">x</span>, <span class="va">path</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -68,44 +58,16 @@ input R object must still fit in R memory. For generated batches, use
 
 
 <dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
-<dd><p>An atomic vector, array, list, or data frame. Array dimensions are
-written in their existing order, including dimensions of length one or zero.</p></dd>
+<dd><p>An R object, as for <code><a href="https://rdrr.io/pkg/jsonlite/man/fromJSON.html" class="external-link">jsonlite::toJSON()</a></code>.</p></dd>
 
 
 <dt id="arg-path">path<a class="anchor" aria-label="anchor" href="#arg-path"></a></dt>
 <dd><p>Destination file path.</p></dd>
 
 
-<dt id="arg-dataframe">dataframe<a class="anchor" aria-label="anchor" href="#arg-dataframe"></a></dt>
-<dd><p>Data frame layout: rows, columns, or values.</p></dd>
-
-
-<dt id="arg-auto-unbox">auto_unbox<a class="anchor" aria-label="anchor" href="#arg-auto-unbox"></a></dt>
-<dd><p>Whether length-one atomic vectors become scalars.</p></dd>
-
-
-<dt id="arg-na">na<a class="anchor" aria-label="anchor" href="#arg-na"></a></dt>
-<dd><p>Encode missing and non-finite values as JSON null or as strings.</p></dd>
-
-
-<dt id="arg-factor">factor<a class="anchor" aria-label="anchor" href="#arg-factor"></a></dt>
-<dd><p>Encode factors as level labels (<code>"string"</code>, the default) or
-integer level indices (<code>"integer"</code>).</p></dd>
-
-
-<dt id="arg-always-decimal">always_decimal<a class="anchor" aria-label="anchor" href="#arg-always-decimal"></a></dt>
-<dd><p>Distinguish doubles from integers by retaining a decimal
-point or exponent in finite double output.</p></dd>
-
-
-<dt id="arg-pretty">pretty<a class="anchor" aria-label="anchor" href="#arg-pretty"></a></dt>
-<dd><p>Whether to indent JSON with two spaces per level. Pretty file
-output ends with a newline.</p></dd>
-
-
-<dt id="arg-digits">digits<a class="anchor" aria-label="anchor" href="#arg-digits"></a></dt>
-<dd><p>Must be <code>NA</code>. Numbers retain full round-trip precision;
-rounding to a specified number of digits is not implemented.</p></dd>
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Options passed on to <code><a href="https://rdrr.io/pkg/jsonlite/man/fromJSON.html" class="external-link">jsonlite::toJSON()</a></code>, such as <code>auto_unbox</code>,
+<code>dataframe</code>, <code>digits</code> or <code>pretty</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -130,7 +92,7 @@ newline-delimited JSON.</p></div>
 <span class="r-in"><span><span class="fu">write_json</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>id <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"A"</span>, <span class="st">"B"</span>, <span class="st">"C"</span><span class="op">)</span><span class="op">)</span>, <span class="va">path</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/readLines.html" class="external-link">readLines</a></span><span class="op">(</span><span class="va">path</span>, warn <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "[{\"id\":1,\"name\":\"A\"},{\"id\":2,\"name\":\"B\"},{\"id\":3,\"name\":\"C\"}]"</span>
-<span class="r-in"><span><span class="fu"><a href="read_json.html">read_json</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="read_json.html">read_json</a></span><span class="op">(</span><span class="va">path</span>, simplifyVector <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   id name</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1  1    A</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 2  2    B</span>

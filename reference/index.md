@@ -8,6 +8,8 @@ Between R objects and JSON text.
   : Convert an R object to JSON text
 - [`fromJSON()`](https://ninohardt.github.io/glazelite/reference/fromJSON.md)
   : Parse JSON text with Glaze
+- [`unbox()`](https://ninohardt.github.io/glazelite/reference/unbox.md)
+  : Mark a value as a JSON scalar
 
 ## Read and write files
 
@@ -26,6 +28,13 @@ One record per line, in batches.
   : Stream batches as newline-delimited JSON
 - [`stream_in()`](https://ninohardt.github.io/glazelite/reference/stream_in.md)
   : Read newline-delimited JSON in pages
+
+## Reformat and check JSON text
+
+- [`prettify()`](https://ninohardt.github.io/glazelite/reference/prettify.md)
+  [`minify()`](https://ninohardt.github.io/glazelite/reference/prettify.md)
+  [`validate()`](https://ninohardt.github.io/glazelite/reference/prettify.md)
+  : Reformat or check JSON text
 
 ## Package
 

@@ -8,62 +8,25 @@ use
 ## Usage
 
 ``` r
-write_json(
-  x,
-  path,
-  dataframe = c("rows", "columns", "values"),
-  auto_unbox = FALSE,
-  na = c("null", "string"),
-  factor = c("string", "integer"),
-  always_decimal = FALSE,
-  pretty = FALSE,
-  digits = NA
-)
+write_json(x, path, ...)
 ```
 
 ## Arguments
 
 - x:
 
-  An atomic vector, array, list, or data frame. Array dimensions are
-  written in their existing order, including dimensions of length one or
-  zero.
+  An R object, as for
+  [`jsonlite::toJSON()`](https://rdrr.io/pkg/jsonlite/man/fromJSON.html).
 
 - path:
 
   Destination file path.
 
-- dataframe:
+- ...:
 
-  Data frame layout: rows, columns, or values.
-
-- auto_unbox:
-
-  Whether length-one atomic vectors become scalars.
-
-- na:
-
-  Encode missing and non-finite values as JSON null or as strings.
-
-- factor:
-
-  Encode factors as level labels (`"string"`, the default) or integer
-  level indices (`"integer"`).
-
-- always_decimal:
-
-  Distinguish doubles from integers by retaining a decimal point or
-  exponent in finite double output.
-
-- pretty:
-
-  Whether to indent JSON with two spaces per level. Pretty file output
-  ends with a newline.
-
-- digits:
-
-  Must be `NA`. Numbers retain full round-trip precision; rounding to a
-  specified number of digits is not implemented.
+  Options passed on to
+  [`jsonlite::toJSON()`](https://rdrr.io/pkg/jsonlite/man/fromJSON.html),
+  such as `auto_unbox`, `dataframe`, `digits` or `pretty`.
 
 ## Value
 
@@ -89,7 +52,7 @@ path <- tempfile(fileext = ".json")
 write_json(data.frame(id = 1:3, name = c("A", "B", "C")), path)
 readLines(path, warn = FALSE)
 #> [1] "[{\"id\":1,\"name\":\"A\"},{\"id\":2,\"name\":\"B\"},{\"id\":3,\"name\":\"C\"}]"
-read_json(path)
+read_json(path, simplifyVector = TRUE)
 #>   id name
 #> 1  1    A
 #> 2  2    B

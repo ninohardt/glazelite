@@ -54,11 +54,13 @@ Records are simplified as the elements of one JSON array would be by
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">stream_in</span><span class="op">(</span></span>
-<span>  <span class="va">path</span>,</span>
+<span>  <span class="va">con</span>,</span>
 <span>  handler <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  pagesize <span class="op">=</span> <span class="fl">500L</span>,</span>
+<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  simplifyVector <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  simplifyDataFrame <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  simplifyDataFrame <span class="op">=</span> <span class="va">simplifyVector</span>,</span>
+<span>  simplifyMatrix <span class="op">=</span> <span class="va">simplifyVector</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -66,7 +68,7 @@ Records are simplified as the elements of one JSON array would be by
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-path">path<a class="anchor" aria-label="anchor" href="#arg-path"></a></dt>
+<dl><dt id="arg-con">con<a class="anchor" aria-label="anchor" href="#arg-con"></a></dt>
 <dd><p>An input path or an R connection. A connection that is not yet
 open is opened for reading and closed again on exit.</p></dd>
 
@@ -80,6 +82,10 @@ are collected and returned.</p></dd>
 <dd><p>Number of lines read per page when a <code>handler</code> is given.</p></dd>
 
 
+<dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
+<dd><p>Accepted for compatibility with jsonlite and ignored.</p></dd>
+
+
 <dt id="arg-simplifyvector">simplifyVector<a class="anchor" aria-label="anchor" href="#arg-simplifyvector"></a></dt>
 <dd><p>Simplify arrays of scalar values to atomic vectors.</p></dd>
 
@@ -87,6 +93,12 @@ are collected and returned.</p></dd>
 <dt id="arg-simplifydataframe">simplifyDataFrame<a class="anchor" aria-label="anchor" href="#arg-simplifydataframe"></a></dt>
 <dd><p>Simplify arrays of records to data frames. Has no
 effect unless <code>simplifyVector</code> is also <code>TRUE</code>.</p></dd>
+
+
+<dt id="arg-simplifymatrix">simplifyMatrix<a class="anchor" aria-label="anchor" href="#arg-simplifymatrix"></a></dt>
+<dd><p>Simplify regular arrays of arrays to matrices and
+higher-dimensional arrays. Has no effect unless <code>simplifyVector</code> is also
+<code>TRUE</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

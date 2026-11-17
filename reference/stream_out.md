@@ -8,15 +8,7 @@ output as an R string.
 ## Usage
 
 ``` r
-stream_out(
-  x,
-  path,
-  auto_unbox = TRUE,
-  na = c("null", "string"),
-  factor = c("string", "integer"),
-  always_decimal = FALSE,
-  digits = NA
-)
+stream_out(x, con, pagesize = 500L, verbose = FALSE, ...)
 ```
 
 ## Arguments
@@ -25,36 +17,35 @@ stream_out(
 
   A data frame, list of records, or batch-producing function.
 
-- path:
+- con:
 
-  Destination file path.
+  A file path or a connection, for example `gzfile("x.json.gz")`.
 
-- auto_unbox:
+- pagesize:
 
-  Whether length-one atomic vectors become scalars.
+  Number of records written to a connection at a time.
 
-- na:
+- verbose:
 
-  Encode missing and non-finite values as JSON null or as strings.
+  Accepted for compatibility with jsonlite and ignored.
 
-- factor:
+- ...:
 
-  Encode factors as level labels (`"string"`, the default) or integer
-  level indices (`"integer"`).
-
-- always_decimal:
-
-  Distinguish doubles from integers by retaining a decimal point or
-  exponent in finite double output.
-
-- digits:
-
-  Must be `NA`. Numbers retain full round-trip precision; rounding to a
-  specified number of digits is not implemented.
+  Options passed on to
+  [`jsonlite::toJSON()`](https://rdrr.io/pkg/jsonlite/man/fromJSON.html),
+  such as `digits`, `factor` or `na`. `auto_unbox` defaults to `TRUE`
+  here, and every record is written on one line.
 
 ## Value
 
-The path, invisibly.
+The path, invisibly, or `NULL` when writing to a connection.
+
+## Details
+
+When `con` is a file path, the records are written to a temporary file
+in the same directory, which is moved into place once it is complete.
+When `con` is a connection, the records are written to it `pagesize` at
+a time; a connection that is not yet open is opened and closed again.
 
 ## See also
 
@@ -87,5 +78,14 @@ stream_in(path)
 #> 4     2   1.5
 #> 5     3   0.5
 #> 6     3   1.5
-unlink(path)
+
+# A connection, here compressed
+zipped <- tempfile(fileext = ".ndjson.gz")
+stream_out(data.frame(id = 1:3), gzfile(zipped))
+stream_in(gzfile(zipped))
+#>   id
+#> 1  1
+#> 2  2
+#> 3  3
+unlink(c(path, zipped))
 ```

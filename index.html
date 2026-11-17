@@ -117,12 +117,27 @@
 <span></span>
 <span><span class="fu"><a href="reference/toJSON.html">toJSON</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/array.html" class="external-link">array</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">8</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">2</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [[[1,5],[3,7]],[[2,6],[4,8]]]</span></span></code></pre></div>
-<p>Arrays of records come back as data frames, and arrays of scalars as vectors:</p>
+<p>Dates and date-times are written as strings, and <code><a href="reference/unbox.html">unbox()</a></code> marks single values that should not become arrays:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/toJSON.html">toJSON</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>day <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="st">"2026-01-31"</span><span class="op">)</span>, n <span class="op">=</span> <span class="fl">3L</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [{"day":"2026-01-31","n":3}]</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/toJSON.html">toJSON</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>id <span class="op">=</span> <span class="fu"><a href="reference/unbox.html">unbox</a></span><span class="op">(</span><span class="fl">7L</span><span class="op">)</span>, tags <span class="op">=</span> <span class="st">"a"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; {"id":7,"tags":["a"]}</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/toJSON.html">toJSON</a></span><span class="op">(</span><span class="va">pi</span>, digits <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [3.142]</span></span></code></pre></div>
+<p>Arrays of records come back as data frames, arrays of scalars as vectors, and arrays of arrays as matrices:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/fromJSON.html">fromJSON</a></span><span class="op">(</span><span class="st">'[{"id":1,"name":"Ada","score":9.5},{"id":2,"name":"Grace"}]'</span><span class="op">)</span></span>
 <span><span class="co">#&gt;   id  name score</span></span>
 <span><span class="co">#&gt; 1  1   Ada   9.5</span></span>
 <span><span class="co">#&gt; 2  2 Grace    NA</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/fromJSON.html">fromJSON</a></span><span class="op">(</span><span class="st">"[[1, 2, 3], [4, 5, 6]]"</span><span class="op">)</span></span>
+<span><span class="co">#&gt;      [,1] [,2] [,3]</span></span>
+<span><span class="co">#&gt; [1,]    1    2    3</span></span>
+<span><span class="co">#&gt; [2,]    4    5    6</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="fu"><a href="reference/fromJSON.html">fromJSON</a></span><span class="op">(</span><span class="st">'{"id": 1, "tags": ["a", "b"], "nested": {"ok": true, "x": [1.5, null]}}'</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; List of 3</span></span>
@@ -135,10 +150,10 @@
 <div class="section level3">
 <h3 id="read-and-write-files">Read and write files<a class="anchor" aria-label="anchor" href="#read-and-write-files"></a>
 </h3>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span>fileext <span class="op">=</span> <span class="st">".json"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/write_json.html">write_json</a></span><span class="op">(</span><span class="va">df</span>, <span class="va">path</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/read_json.html">read_json</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/read_json.html">read_json</a></span><span class="op">(</span><span class="va">path</span>, simplifyVector <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="co">#&gt;   id  name score</span></span>
 <span><span class="co">#&gt; 1  1   Ada   9.5</span></span>
 <span><span class="co">#&gt; 2  2 Grace    NA</span></span></code></pre></div>
@@ -148,7 +163,7 @@
 <h3 id="stream-newline-delimited-json">Stream newline-delimited JSON<a class="anchor" aria-label="anchor" href="#stream-newline-delimited-json"></a>
 </h3>
 <p><code><a href="reference/stream_out.html">stream_out()</a></code> writes one record per line from a data frame, a list of records, or a function that returns one batch at a time and finally <code>NULL</code>:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ndjson</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span>fileext <span class="op">=</span> <span class="st">".ndjson"</span><span class="op">)</span></span>
 <span><span class="va">i</span> <span class="op">&lt;-</span> <span class="fl">0L</span></span>
 <span><span class="fu"><a href="reference/stream_out.html">stream_out</a></span><span class="op">(</span><span class="kw">function</span><span class="op">(</span><span class="op">)</span> <span class="op">{</span></span>
@@ -169,7 +184,7 @@
 <span><span class="co">#&gt; 5     3   0.5</span></span>
 <span><span class="co">#&gt; 6     3   1.5</span></span></code></pre></div>
 <p>Pass a <code>handler</code> to <code><a href="reference/stream_in.html">stream_in()</a></code> to process the file page by page without holding all of it in memory:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">total</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
 <span><span class="fu"><a href="reference/stream_in.html">stream_in</a></span><span class="op">(</span><span class="va">ndjson</span>, handler <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">page</span><span class="op">)</span> <span class="va">total</span> <span class="op">&lt;&lt;-</span> <span class="va">total</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">page</span><span class="op">$</span><span class="va">value</span><span class="op">)</span>,</span>
 <span>          pagesize <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
@@ -238,13 +253,12 @@
 <div class="section level2">
 <h2 id="a-substitute-for-jsonlite">A substitute for jsonlite<a class="anchor" aria-label="anchor" href="#a-substitute-for-jsonlite"></a>
 </h2>
-<p>glazelite uses jsonlite’s function names and, for the options it implements, the same argument names, so common code keeps working when <code><a href="https://jeroen.r-universe.dev/jsonlite" class="external-link">library(jsonlite)</a></code> is replaced with <code><a href="https://ninohardt.github.io/glazelite/">library(glazelite)</a></code>. For vectors, arrays of every shape and all data frame layouts the JSON has the same structure as jsonlite’s: the same nesting, element order and field layout. The package’s tests check this against jsonlite.</p>
-<p>Three defaults differ on purpose:</p>
+<p>glazelite uses jsonlite’s function names and argument names, so common code keeps working when <code><a href="https://jeroen.r-universe.dev/jsonlite" class="external-link">library(jsonlite)</a></code> is replaced with <code><a href="https://ninohardt.github.io/glazelite/">library(glazelite)</a></code>. That covers <code><a href="reference/toJSON.html">toJSON()</a></code>, <code><a href="reference/fromJSON.html">fromJSON()</a></code>, <code><a href="reference/write_json.html">write_json()</a></code>, <code><a href="reference/read_json.html">read_json()</a></code>, <code><a href="reference/stream_in.html">stream_in()</a></code>, <code><a href="reference/stream_out.html">stream_out()</a></code>, <code><a href="reference/unbox.html">unbox()</a></code>, <code><a href="reference/prettify.html">prettify()</a></code>, <code><a href="reference/prettify.html">minify()</a></code> and <code><a href="reference/prettify.html">validate()</a></code>.</p>
+<p>The JSON has the same structure as jsonlite’s for vectors, arrays of every shape, lists, dates and date-times, and all data frame layouts including row names. With <code>digits</code> set, numbers are rounded and written exactly as jsonlite writes them. The package’s tests check all of this against jsonlite.</p>
+<p>Two defaults differ on purpose:</p>
 <ul>
-<li>Numbers keep full precision: every double is written as the shortest text that reads back to the same value. jsonlite rounds to four decimal digits by default and to 15 significant digits with <code>digits = NA</code>, so <code>toJSON(pi)</code> is <code>[3.1416]</code> there and <code>[3.141592653589793]</code> here.</li>
+<li>Numbers keep full precision: every double is written as the shortest text that reads back to the same value. jsonlite rounds to four decimal digits by default, so <code>toJSON(pi)</code> is <code>[3.1416]</code> there and <code>[3.141592653589793]</code> here. Use <code>digits = 4</code> for jsonlite’s output.</li>
 <li>Missing and non-finite numbers are written as <code>null</code>. jsonlite writes the strings <code>"NA"</code>, <code>"NaN"</code> and <code>"Inf"</code>; <code>na = "string"</code> does the same here.</li>
-<li>
-<code><a href="reference/read_json.html">read_json()</a></code> simplifies to vectors and data frames, as <code><a href="reference/fromJSON.html">fromJSON()</a></code> does. jsonlite’s <code><a href="reference/read_json.html">read_json()</a></code> returns nested lists unless <code>simplifyVector = TRUE</code>.</li>
 </ul>
 <p>yyjsonr, the fastest JSON package for R, makes a different trade-off: it has its own interface (<code>write_json_str()</code>, <code>read_json_str()</code>, options objects), and what it writes differs from jsonlite in places. With default options (jsonlite with <code>digits = NA</code>, yyjsonr 0.1.22):</p>
 <table class="table">
@@ -297,25 +311,16 @@
 </tr>
 </tbody>
 </table>
-<p>glazelite does not cover all of jsonlite yet. The differences that remain:</p>
-<p><strong>Writing</strong></p>
+<p>glazelite does not cover all of jsonlite. What is missing or different:</p>
 <ul>
-<li>Supported inputs are logical, integer, double, character, and factor vectors; arrays of any dimension; lists; and data frames of those types, including matrix, list, and data-frame columns. Other classes, such as dates, date-times and <code><a href="https://rdrr.io/pkg/jsonlite/man/unbox.html" class="external-link">jsonlite::unbox()</a></code> values, and complex and raw vectors raise an error instead of being converted; jsonlite and yyjsonr write dates as strings.</li>
+<li>Complex and raw vectors, and objects of classes other than factors, dates and date-times, raise an error instead of being converted.</li>
+<li>With the default <code>digits = NA</code>, exponents are written as <code>1E20</code> rather than <code>1e+20</code>. Both are valid JSON for the same number.</li>
+<li>Duplicated names in a list are written as they are; jsonlite makes them unique.</li>
+<li>When reading, arrays of mixed types stay lists instead of being coerced to character, and arrays of records whose fields hold arrays or objects stay lists of records, where jsonlite returns a data frame with list columns. The <code>flatten</code> argument is not available.</li>
 <li>
-<code>NULL</code> is written as <code>null</code> (jsonlite writes <code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{}</a></code>), row names of data frames are not written (jsonlite adds a <code>_row</code> field for non-default row names), and lists in which only some elements are named raise an error.</li>
-<li>Exponents are written as <code>1E20</code> rather than <code>1e+20</code>. Both are valid JSON for the same number.</li>
-<li>The <code>dataframe</code>, <code>auto_unbox</code>, <code>na</code>, <code>factor</code>, <code>always_decimal</code>, and <code>pretty</code> options are implemented. <code>digits</code> must be <code>NA</code>: numbers always keep full precision, and rounding is not implemented.</li>
-<li>In the row layout of a data frame, missing fields are omitted, as in jsonlite.</li>
-<li>Arrays keep their dimension order and dimensions of length one or zero. As with jsonlite, <code>auto_unbox = TRUE</code> keeps dimensioned length-one vectors and values wrapped in <code><a href="https://rdrr.io/r/base/AsIs.html" class="external-link">I()</a></code> as JSON arrays.</li>
-<li>Factors are written as labels; <code>factor = "integer"</code> writes their level indices. <code>always_decimal = TRUE</code> keeps a decimal point or exponent for doubles, while integers and factor codes stay integers.</li>
-</ul>
-<p><strong>Reading</strong></p>
-<ul>
-<li>Arrays of scalars of one type become atomic vectors, and arrays of records with scalar fields become data frames.</li>
-<li>There is no matrix simplification: <code>[[1,2],[3,4]]</code> becomes a list of two vectors, where jsonlite and yyjsonr return a matrix. The <code>simplifyMatrix</code> and <code>flatten</code> arguments are not available.</li>
+<code><a href="reference/fromJSON.html">fromJSON()</a></code> reads a JSON string or a file path, but not a URL.</li>
 <li>
-<code><a href="reference/stream_in.html">stream_in()</a></code> and <code><a href="reference/stream_out.html">stream_out()</a></code> name their file argument <code>path</code>, where jsonlite uses <code>con</code>.</li>
-<li>Arrays of mixed types stay lists instead of being coerced to character, and records with nested fields stay lists of records.</li>
+<code>serializeJSON()</code>, <code>rbind_pages()</code> and the base64 helpers are not provided.</li>
 </ul>
 </div>
 <div class="section level2">

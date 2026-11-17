@@ -39,25 +39,53 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.2" id="glazelite-012">glazelite 0.1.2<a class="anchor" aria-label="anchor" href="#glazelite-012"></a></h2>
-<ul><li>First release prepared for CRAN.</li>
-<li>All exported functions now document their return value and have runnable examples.</li>
+<p>First release prepared for CRAN.</p>
+<div class="section level3">
+<h3 id="closer-to-jsonlite-0-1-2">Closer to jsonlite<a class="anchor" aria-label="anchor" href="#closer-to-jsonlite-0-1-2"></a></h3>
+<ul><li>
+<code><a href="../reference/toJSON.html">toJSON()</a></code> writes <code>Date</code> objects and date-times (<code>POSIXct</code>, <code>POSIXlt</code>), with the <code>Date</code>, <code>POSIXt</code> and <code>UTC</code> arguments of jsonlite.</li>
+<li>New <code><a href="../reference/unbox.html">unbox()</a></code> marks single values that should be written as scalars.</li>
+<li>
+<code>digits</code> rounds numbers as jsonlite does: a number gives decimal digits and <code>I(n)</code> significant digits. The default, <code>NA</code>, still keeps full precision.</li>
+<li>
+<code>NULL</code> is written as <code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{}</a></code> by default (<code>null = "null"</code> writes <code>null</code>), list elements without a name are keyed by their position, and character row names of data frames are written as <code>_row</code> (see <code>rownames</code>).</li>
+<li>
+<code>pretty</code> also accepts the number of spaces to indent by.</li>
+<li>
+<code><a href="../reference/fromJSON.html">fromJSON()</a></code>, <code><a href="../reference/read_json.html">read_json()</a></code> and <code><a href="../reference/stream_in.html">stream_in()</a></code> gain <code>simplifyMatrix</code>: regular arrays of arrays become matrices and higher-dimensional arrays, so <code>fromJSON(toJSON(x))</code> returns a matrix or array <code>x</code> unchanged.</li>
+<li>
+<code><a href="../reference/read_json.html">read_json()</a></code> returns nested lists unless <code>simplifyVector = TRUE</code>, as in jsonlite. <code>simplifyDataFrame</code> and <code>simplifyMatrix</code> default to <code>simplifyVector</code>.</li>
+<li>New <code><a href="../reference/prettify.html">prettify()</a></code>, <code><a href="../reference/prettify.html">minify()</a></code> and <code><a href="../reference/prettify.html">validate()</a></code>.</li>
+<li>
+<code><a href="../reference/stream_out.html">stream_out()</a></code> and <code><a href="../reference/stream_in.html">stream_in()</a></code> take <code>con</code>, a file path or a connection, and accept <code>verbose</code>. <code><a href="../reference/stream_out.html">stream_out()</a></code> can write to connections such as <code><a href="https://rdrr.io/r/base/connections.html" class="external-link">gzfile()</a></code>. The argument was called <code>path</code> before.</li>
+<li>
+<code><a href="../reference/write_json.html">write_json()</a></code> and <code><a href="../reference/stream_out.html">stream_out()</a></code> pass their options on to <code><a href="../reference/toJSON.html">toJSON()</a></code> through <code>...</code>.</li>
 <li>
 <code><a href="../reference/toJSON.html">toJSON()</a></code> returns an object of class <code>c("glazelite_json", "json")</code> that prints as plain JSON text.</li>
-<li>The package has a logo and a website at <a href="https://ninohardt.github.io/glazelite/" class="uri">https://ninohardt.github.io/glazelite/</a>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="reading-0-1-2">Reading<a class="anchor" aria-label="anchor" href="#reading-0-1-2"></a></h3>
+<ul><li>
+<code><a href="../reference/fromJSON.html">fromJSON()</a></code>, <code><a href="../reference/read_json.html">read_json()</a></code> and <code><a href="../reference/stream_in.html">stream_in()</a></code> simplify arrays to vectors, matrices and data frames in C++ while converting the parsed document, which makes reading several times faster than before.</li>
+<li>Simplification follows the JSON structure: an array of arrays of records is a list of data frames, integer arrays containing <code>null</code> stay integer, and <code>[{}, {}]</code> is a data frame with two rows and no columns.</li>
+<li>Truncated documents, input with content after the document, and empty input are rejected instead of returning a partial result.</li>
 <li>
-<code><a href="../reference/stream_in.html">stream_in()</a></code> opens a connection that is not yet open once, instead of re-reading its first page indefinitely, and rejects inputs that are neither a path nor a connection.</li>
-<li>
-<code><a href="../reference/fromJSON.html">fromJSON()</a></code>, <code><a href="../reference/read_json.html">read_json()</a></code> and <code><a href="../reference/stream_in.html">stream_in()</a></code> now simplify arrays to vectors and data frames in C++ while converting the parsed document, which makes reading several times faster than before.</li>
-<li>Simplification follows the JSON structure: <code>[[1], [2]]</code> is a list of two vectors instead of a vector, an array of arrays of records is a list of data frames, integer arrays containing <code>null</code> stay integer, and <code>[{}, {}]</code> is a data frame with two rows and no columns.</li>
-<li>
-<code><a href="../reference/stream_in.html">stream_in()</a></code> without a <code>handler</code> reads all lines and parses them together; <code>pagesize</code> applies to pages passed to a <code>handler</code>.</li>
-<li>Data frames with matrix columns or data-frame columns are written one row at a time as nested arrays or records instead of using only their first column, and data frames whose columns differ in length are rejected.</li>
-<li>
-<code><a href="../reference/fromJSON.html">fromJSON()</a></code> and <code><a href="../reference/read_json.html">read_json()</a></code> now reject truncated documents, input with content after the document, and empty input, instead of returning a partial result.</li>
+<code><a href="../reference/stream_in.html">stream_in()</a></code> without a <code>handler</code> reads all lines and parses them together; <code>pagesize</code> applies to pages passed to a <code>handler</code>. A connection that is not yet open is opened once, instead of re-reading its first page indefinitely.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="writing-0-1-2">Writing<a class="anchor" aria-label="anchor" href="#writing-0-1-2"></a></h3>
+<ul><li>Data frames with matrix columns or data-frame columns are written one row at a time as nested arrays or records instead of using only their first column, and data frames whose columns differ in length are rejected.</li>
+<li>An empty named list is written as <code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{}</a></code>.</li>
 <li>File paths are tilde-expanded.</li>
 <li>Interrupting a long write no longer leaves the output file open; errors and interrupts are raised only after the native writer has released its resources.</li>
-<li>Bundle only the Glaze headers needed for JSON, and credit the authors of the third-party code contained in Glaze (see <code>inst/COPYRIGHTS</code>).</li>
 </ul></div>
+<div class="section level3">
+<h3 id="package-0-1-2">Package<a class="anchor" aria-label="anchor" href="#package-0-1-2"></a></h3>
+<ul><li>All exported functions document their return value and have runnable examples.</li>
+<li>Bundle only the Glaze headers needed for JSON, and credit the authors of the third-party code contained in Glaze (see <code>inst/COPYRIGHTS</code>).</li>
+<li>The package has a logo and a website at <a href="https://ninohardt.github.io/glazelite/" class="uri">https://ninohardt.github.io/glazelite/</a>.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.1" id="glazelite-011">glazelite 0.1.1<a class="anchor" aria-label="anchor" href="#glazelite-011"></a></h2>
 <ul><li>Write one-dimensional and higher-dimensional atomic arrays in their existing dimension order, preserving singleton and empty dimensions without copying.</li>

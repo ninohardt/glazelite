@@ -53,15 +53,7 @@ output as an R string.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">stream_out</span><span class="op">(</span></span>
-<span>  <span class="va">x</span>,</span>
-<span>  <span class="va">path</span>,</span>
-<span>  auto_unbox <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  na <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"null"</span>, <span class="st">"string"</span><span class="op">)</span>,</span>
-<span>  factor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"string"</span>, <span class="st">"integer"</span><span class="op">)</span>,</span>
-<span>  always_decimal <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  digits <span class="op">=</span> <span class="cn">NA</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">stream_out</span><span class="op">(</span><span class="va">x</span>, <span class="va">con</span>, pagesize <span class="op">=</span> <span class="fl">500L</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -72,36 +64,34 @@ output as an R string.</p>
 <dd><p>A data frame, list of records, or batch-producing function.</p></dd>
 
 
-<dt id="arg-path">path<a class="anchor" aria-label="anchor" href="#arg-path"></a></dt>
-<dd><p>Destination file path.</p></dd>
+<dt id="arg-con">con<a class="anchor" aria-label="anchor" href="#arg-con"></a></dt>
+<dd><p>A file path or a connection, for example <code>gzfile("x.json.gz")</code>.</p></dd>
 
 
-<dt id="arg-auto-unbox">auto_unbox<a class="anchor" aria-label="anchor" href="#arg-auto-unbox"></a></dt>
-<dd><p>Whether length-one atomic vectors become scalars.</p></dd>
+<dt id="arg-pagesize">pagesize<a class="anchor" aria-label="anchor" href="#arg-pagesize"></a></dt>
+<dd><p>Number of records written to a connection at a time.</p></dd>
 
 
-<dt id="arg-na">na<a class="anchor" aria-label="anchor" href="#arg-na"></a></dt>
-<dd><p>Encode missing and non-finite values as JSON null or as strings.</p></dd>
+<dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
+<dd><p>Accepted for compatibility with jsonlite and ignored.</p></dd>
 
 
-<dt id="arg-factor">factor<a class="anchor" aria-label="anchor" href="#arg-factor"></a></dt>
-<dd><p>Encode factors as level labels (<code>"string"</code>, the default) or
-integer level indices (<code>"integer"</code>).</p></dd>
-
-
-<dt id="arg-always-decimal">always_decimal<a class="anchor" aria-label="anchor" href="#arg-always-decimal"></a></dt>
-<dd><p>Distinguish doubles from integers by retaining a decimal
-point or exponent in finite double output.</p></dd>
-
-
-<dt id="arg-digits">digits<a class="anchor" aria-label="anchor" href="#arg-digits"></a></dt>
-<dd><p>Must be <code>NA</code>. Numbers retain full round-trip precision;
-rounding to a specified number of digits is not implemented.</p></dd>
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Options passed on to <code><a href="https://rdrr.io/pkg/jsonlite/man/fromJSON.html" class="external-link">jsonlite::toJSON()</a></code>, such as <code>digits</code>, <code>factor</code> or
+<code>na</code>. <code>auto_unbox</code> defaults to <code>TRUE</code> here, and every record is written
+on one line.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>The path, invisibly.</p>
+    <p>The path, invisibly, or <code>NULL</code> when writing to a connection.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>When <code>con</code> is a file path, the records are written to a temporary file in
+the same directory, which is moved into place once it is complete. When
+<code>con</code> is a connection, the records are written to it <code>pagesize</code> at a time;
+a connection that is not yet open is opened and closed again.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -133,7 +123,16 @@ rounding to a specified number of digits is not implemented.</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 4     2   1.5</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5     3   0.5</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 6     3   1.5</span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># A connection, here compressed</span></span></span>
+<span class="r-in"><span><span class="va">zipped</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span>fileext <span class="op">=</span> <span class="st">".ndjson.gz"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">stream_out</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>id <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/connections.html" class="external-link">gzfile</a></span><span class="op">(</span><span class="va">zipped</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="stream_in.html">stream_in</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/connections.html" class="external-link">gzfile</a></span><span class="op">(</span><span class="va">zipped</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   id</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1  1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2  2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3  3</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">path</span>, <span class="va">zipped</span><span class="op">)</span><span class="op">)</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

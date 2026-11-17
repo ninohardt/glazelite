@@ -22,6 +22,14 @@ offers a subset of the 'jsonlite' interface:
   [`jsonlite::stream_in()`](https://rdrr.io/pkg/jsonlite/man/stream_in.html)
   write and read newline-delimited JSON (NDJSON) in batches.
 
+- [`jsonlite::prettify()`](https://rdrr.io/pkg/jsonlite/man/prettify.html),
+  [`jsonlite::minify()`](https://rdrr.io/pkg/jsonlite/man/prettify.html)
+  and
+  [`jsonlite::validate()`](https://rdrr.io/pkg/jsonlite/man/validate.html)
+  reformat and check JSON text, and
+  [`jsonlite::unbox()`](https://rdrr.io/pkg/jsonlite/man/unbox.html)
+  marks single values that are written as scalars.
+
 ## Credits
 
 All JSON encoding and parsing is done by Glaze, which is bundled with
@@ -32,6 +40,8 @@ the installed package for details.
 ## See also
 
 Useful links:
+
+- <https://ninohardt.github.io/glazelite/>
 
 - <https://github.com/ninohardt/glazelite>
 
