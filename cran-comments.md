@@ -11,6 +11,10 @@ This is a new submission.
   R 4.6.2 and R 4.5.3
 * GitHub Actions, macOS 26 (arm64), Apple clang 21.0.0, R 4.6.2
 * GitHub Actions, Windows Server 2022 x64, GCC 14.3.0, R 4.6.2
+* R-hub, macOS 15 (x86_64), Apple clang 17.0.0, R-devel
+* R-hub, macOS 26 (arm64), Apple clang 21.0.0, R-devel
+* R-hub Linux containers, R-devel: gcc16 (GCC 16.2.1), clang23 (clang 23.1.6),
+  gcc-asan, clang-asan, clang-ubsan and valgrind, all without findings
 
 ## R CMD check results
 
